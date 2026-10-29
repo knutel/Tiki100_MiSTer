@@ -43,7 +43,6 @@ assign AUDIO_L = 0;
 assign AUDIO_R = 0;
 assign AUDIO_MIX = 0;
 
-assign LED_DISK = 0;
 assign LED_POWER = 0;
 assign BUTTONS = 0;
 
@@ -59,24 +58,6 @@ localparam CONF_STR = {
 	"Tiki100;;",
 	"-;",
 	"O[122:121],Aspect ratio,Original,Full Screen,[ARC1],[ARC2];",
-	"O[2],TV Mode,NTSC,PAL;",
-	"O[4:3],Noise,White,Red,Green,Blue;",
-	"-;",
-	"P1,Test Page 1;",
-	"P1-;",
-	"P1-, -= Options in page 1 =-;",
-	"P1-;",
-	"P1O[5],Option 1-1,Off,On;",
-	"d0P1F1,BIN;",
-	"H0P1O[10],Option 1-2,Off,On;",
-	"-;",
-	"P2,Test Page 2;",
-	"P2-;",
-	"P2-, -= Options in page 2 =-;",
-	"P2-;",
-	"P2S0,DSK;",
-	"P2O[7:6],Option 2,1,2,3,4;",
-	"-;",
 	"-;",
 	"T[0],Reset;",
 	"R[0],Reset and close OSD;",
@@ -91,6 +72,12 @@ wire   [1:0] buttons;
 wire [127:0] status;
 wire  [10:0] ps2_key;
 
+wire        ioctl_download;
+wire [15:0] ioctl_index;
+wire        ioctl_wr;
+wire [26:0] ioctl_addr;
+wire  [7:0] ioctl_dout;
+
 hps_io #(.CONF_STR(CONF_STR)) hps_io
 (
 	.clk_sys(clk_sys),
@@ -102,8 +89,15 @@ hps_io #(.CONF_STR(CONF_STR)) hps_io
 
 	.buttons(buttons),
 	.status(status),
-	.status_menumask({status[5]}),
-	
+	.status_menumask(16'd0),
+
+	.ioctl_download(ioctl_download),
+	.ioctl_index(ioctl_index),
+	.ioctl_wr(ioctl_wr),
+	.ioctl_addr(ioctl_addr),
+	.ioctl_dout(ioctl_dout),
+	.ioctl_wait(1'b0),
+
 	.ps2_key(ps2_key)
 );
 
@@ -118,8 +112,6 @@ pll pll
 );
 
 wire reset = RESET | status[0] | buttons[1];
-
-wire [1:0] col = status[4:3];
 
 wire HBlank;
 wire HSync;
@@ -142,7 +134,7 @@ mycore mycore
 	.clk(clk_sys),
 	.reset(reset_core),
 
-	.pal(status[2]),
+	.pal(1'b1),
 	.scandouble(forced_scandoubler),
 
 	.ce_pix(ce_pix),
@@ -162,12 +154,41 @@ assign CE_PIXEL = ce_pix;
 assign VGA_DE = ~(HBlank | VBlank);
 assign VGA_HS = HSync;
 assign VGA_VS = VSync;
-assign VGA_G  = (!col || col == 2) ? video : 8'd0;
-assign VGA_R  = (!col || col == 1) ? video : 8'd0;
-assign VGA_B  = (!col || col == 3) ? video : 8'd0;
+assign VGA_G  = video;
+assign VGA_R  = video;
+assign VGA_B  = video;
 
-reg  [26:0] act_cnt;
-always @(posedge clk_sys) act_cnt <= act_cnt + 1'd1; 
-assign LED_USER    = act_cnt[26]  ? act_cnt[25:18]  > act_cnt[7:0]  : act_cnt[25:18]  <= act_cnt[7:0];
+///////////////////////   TIKI 100   /////////////////////////////
+
+// Main_MiSTer loads boot.rom with index 0 and boot1.rom with index 0x40
+// (index = N << 6) from games/Tiki100/ when the core starts.
+wire rom_wr  = ioctl_download && ioctl_wr && ioctl_index[7:6] == 2'd0 && ioctl_addr < 27'h2000;
+wire prom_wr = ioctl_download && ioctl_wr && ioctl_index[7:6] == 2'd1 && ioctl_addr < 27'h100;
+
+wire [7:0] sys_latch;
+
+tiki100 tiki100
+(
+	.clk(clk_sys),
+	.reset(reset | ioctl_download),   // hold the CPU in reset while ROMs load
+
+	.rom_wr(rom_wr),
+	.prom_wr(prom_wr),
+	.dl_addr(ioctl_addr[12:0]),
+	.dl_data(ioctl_dout),
+
+	.key_col(),
+	.key_row(8'hFF),                  // milestone 4: PS/2 keyboard matrix
+
+	.sys_latch(sys_latch),
+	.video_mode(),
+	.palette_val(),
+	.scroll()
+);
+
+// GRAFIKK key LED (system latch bit 5) on the user LED,
+// drive 0 select (bit 0) on the disk LED.
+assign LED_USER = sys_latch[5];
+assign LED_DISK = {1'b1, sys_latch[0]};
 
 endmodule

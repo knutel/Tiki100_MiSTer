@@ -38,3 +38,17 @@ c5_pin_model_dump.txt
 *_netlist
 *.cdf
 **/.DS_Store
+# ROMs, romsets and disk images are never committed
+*.rom
+*.bin
+*.zip
+*.dsk
+*.img
+*.imd
+*.td0
+*.dmk
+*.hfe
+*.mfm
+
+# Simulation build output
+sim/obj/
