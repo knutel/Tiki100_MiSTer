@@ -10,6 +10,7 @@ module sim_top
 	input  [12:0] dl_addr,
 	input   [7:0] dl_data,
 	input         loopback,     // connect each DART channel's TxD to its RxD
+	input  [10:0] ps2_key,
 
 	output        m1_n,
 	output        mreq_n,
@@ -41,8 +42,7 @@ tiki100 core
 	.prom_wr(prom_wr),
 	.dl_addr(dl_addr),
 	.dl_data(dl_data),
-	.key_col(),
-	.key_row(8'hFF),
+	.ps2_key(ps2_key),
 	.sys_latch(sys_latch),
 	.ser_rxd(loopback ? ser_txd : 2'b11),
 	.ser_txd(ser_txd),

@@ -43,7 +43,6 @@ assign AUDIO_L = 0;
 assign AUDIO_R = 0;
 assign AUDIO_MIX = 0;
 
-assign LED_POWER = 0;
 assign BUTTONS = 0;
 
 //////////////////////////////////////////////////////////////////
@@ -133,8 +132,7 @@ tiki100 tiki100
 	.dl_addr(ioctl_addr[12:0]),
 	.dl_data(ioctl_dout),
 
-	.key_col(),
-	.key_row(8'hFF),                  // milestone 4: PS/2 keyboard matrix
+	.ps2_key(ps2_key),
 
 	.sys_latch(sys_latch),
 
@@ -174,9 +172,10 @@ assign VGA_DE    = ~(HBlank | VBlank);
 assign VGA_HS    = HSync;
 assign VGA_VS    = VSync;
 
-// GRAFIKK key LED (system latch bit 5) on the user LED,
-// drive 0 select (bit 0) on the disk LED.
-assign LED_USER = sys_latch[5];
-assign LED_DISK = {1'b1, sys_latch[0]};
+// GRAFIKK key LED (system latch bit 5) on the user LED, LOCK key LED
+// (bit 7) on the power LED, drive 0 select (bit 0) on the disk LED.
+assign LED_USER  = sys_latch[5];
+assign LED_POWER = {1'b1, sys_latch[7]};
+assign LED_DISK  = {1'b1, sys_latch[0]};
 
 endmodule

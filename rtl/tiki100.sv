@@ -31,10 +31,8 @@ module tiki100
 	input  [12:0] dl_addr,
 	input   [7:0] dl_data,
 
-	// Keyboard matrix: the core outputs the column it is reading,
-	// the matrix returns that column's 8 rows (active low).
-	output  [3:0] key_col,
-	input   [7:0] key_row,
+	// Keyboard: PS/2 key events from hps_io
+	input  [10:0] ps2_key,
 
 	// System latch (ports 1C-1F): drive select, ROME, VIRE, density, LEDs, motor
 	output  [7:0] sys_latch,
@@ -243,16 +241,16 @@ always @(posedge clk) begin
 end
 
 ////////////////////////////////////////////////////////////////////////////////
-// Keyboard column counter
+// Keyboard
 //
-// Each read of port 00 returns the current column and then advances a 4-bit
-// counter. Any write to port 00 resets it. Columns 13-15 read FF.
+// Each read of port 00 returns the current column of the key matrix and then
+// advances a 4-bit counter. Any write to port 00 resets it. Columns 13-15
+// read FF.
 
 reg  [3:0] key_cnt;
 reg        key_rd_d;
 wire       key_rd = io_rd && io_keys;
 
-assign key_col = key_cnt;
 
 always @(posedge clk) begin
 	key_rd_d <= key_rd;
@@ -260,7 +258,16 @@ always @(posedge clk) begin
 	else if (key_rd_d && !key_rd)    key_cnt <= key_cnt + 4'd1;   // advance at the end of the read
 end
 
-wire [7:0] key_dout = (key_cnt < 4'd13) ? key_row : 8'hFF;
+wire [7:0] key_dout;
+
+tiki100_keyboard keyboard
+(
+	.clk(clk),
+	.reset(reset),
+	.ps2_key(ps2_key),
+	.col(key_cnt),
+	.row(key_dout)
+);
 
 ////////////////////////////////////////////////////////////////////////////////
 // AY-3-8912 register stub

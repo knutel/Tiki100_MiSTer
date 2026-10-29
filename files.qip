@@ -1,6 +1,7 @@
 set_global_assignment -name QIP_FILE rtl/T80/T80.qip
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/tiki100.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/tiki100_video.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/tiki100_keyboard.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/z80ctc.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/z80dart.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/z80pio.sv

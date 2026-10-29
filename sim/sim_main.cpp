@@ -15,6 +15,11 @@
 //   --results FILE      write every byte the CPU writes to port FF (the
 //                       test ROMs' result port) to FILE, one hex byte per line
 //   --loopback 1        connect each DART channel's TxD to its RxD
+//   --keys FILE         PS/2 key events, one per line: "frame scancode 1|0"
+//                       (1 = press, 0 = release). The scancode is set 2 hex,
+//                       with E0 in front for extended keys, e.g. "300 32 1"
+//                       presses B at the start of frame 300, "310 E06B 0"
+//                       releases left arrow.
 //
 // Debug switches (environment variables):
 //   TRACE_BYTES=1  print the first 20 opcode fetches with the byte read
@@ -24,6 +29,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <deque>
 #include <set>
 #include <string>
 #include <vector>
@@ -64,6 +70,10 @@ int main(int argc, char **argv)
 
 	FILE *trace = nullptr, *results = nullptr;
 	bool loopback = false;
+	struct KeyEvent { long frame; unsigned ps2; };
+	std::deque<KeyEvent> keys;      // in file order
+	std::deque<unsigned> key_queue; // due, waiting to be sent
+	unsigned long long last_key_clk = 0;
 	long max_instr = -1, max_frames = -1;
 	std::set<long> dump;
 	std::string outdir = ".";
@@ -78,6 +88,17 @@ int main(int argc, char **argv)
 		else if (a == "--outdir")       outdir = v;
 		else if (a == "--results")      { results = fopen(v, "w"); if (!results) { perror(v); return 1; } }
 		else if (a == "--loopback")     loopback = atoi(v) != 0;
+		else if (a == "--keys") {
+			FILE *f = fopen(v, "r");
+			if (!f) { perror(v); return 1; }
+			long frame; char code[16]; int press;
+			while (fscanf(f, "%ld %15s %d", &frame, code, &press) == 3) {
+				unsigned c = strtoul(code, nullptr, 16);
+				unsigned ev = (press ? 0x200 : 0) | (c > 0xFF ? 0x100 : 0) | (c & 0xFF);
+				keys.push_back({frame, ev});
+			}
+			fclose(f);
+		}
 		else { fprintf(stderr, "unknown option %s\n", a.c_str()); return 1; }
 	}
 	if (max_instr < 0 && max_frames < 0) max_frames = 1;
@@ -153,6 +174,14 @@ int main(int argc, char **argv)
 		}
 		in_fetch = fetch;
 
+		// Send queued key events like hps_io: bit 10 toggles for each event.
+		// Space them out so the core sees each one.
+		if (!key_queue.empty() && cycles - last_key_clk > 1000) {
+			top->ps2_key = ((top->ps2_key ^ 0x400) & 0x400) | key_queue.front();
+			key_queue.pop_front();
+			last_key_clk = cycles;
+		}
+
 		bool io_write = !top->iorq_n && !top->wr_n;
 		if (io_write && !last_io_write && results && (top->addr & 0xFF) == 0xFF) {
 			fprintf(results, "%02X\n", top->dout);
@@ -188,6 +217,10 @@ int main(int argc, char **argv)
 					save_ppm(outdir + name, frame);
 				}
 				frames++;
+				while (!keys.empty() && keys.front().frame <= frames) {
+					key_queue.push_back(keys.front().ps2);
+					keys.pop_front();
+				}
 				y = 0;
 			}
 			if (top->vsync && !last_vsync) {

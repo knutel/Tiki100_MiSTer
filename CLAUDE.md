@@ -150,8 +150,8 @@ IM2 daisy chain, highest priority first: CTC, DART, PIO, then the three expansio
 | 10 | 4 (num) | 5 (num) | 6 (num) | HTAB | 1 (num) | 0 (num) | . (num) | – |
 | 11 | HJEM | Right | 2 (num) | 3 (num) | ENTER (num) | – | – | – |
 
-- MAME's PC mapping: BRYTT = Esc, SLETT = Backspace, ANGRE = Delete, GRAFIKK = Left Alt, LOCK = Caps Lock, UTVID = Insert, SIDEOPP = Page Up, SIDENED = Page Down, HJEM = Home, HTAB = Tab. Ø, Å, Æ go on the keys a Norwegian PC keyboard has them on. HJELP, VTAB, % and = have no default; pick unused PC keys and document them.
-- Drive the two key LEDs from the system latch to the MiSTer LEDs if useful.
+- MAME's PC mapping: BRYTT = Esc, SLETT = Backspace, ANGRE = Delete, GRAFIKK = Left Alt, LOCK = Caps Lock, UTVID = Insert, SIDEOPP = Page Up, SIDENED = Page Down, HJEM = Home, HTAB = Tab. Ø, Å, Æ go on the keys a Norwegian PC keyboard has them on. HJELP, VTAB, % and = have no default in MAME; the core uses F7, F8, Num Lock and F9 (documented in the README and `rtl/tiki100_keyboard.sv`).
+- The key LEDs go to the MiSTer LEDs: GRAFIKK (latch bit 5) on the user LED, LOCK (bit 7) on the power LED, with the latch bit's polarity, as in MAME.
 
 ### Disks
 

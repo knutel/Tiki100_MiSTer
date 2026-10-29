@@ -6,13 +6,40 @@ school computer. MAME's `tiki100` driver is used as the hardware reference.
 Work in progress. Implemented so far: Z80 CPU (T80), 64 KB RAM, 32 KB video
 RAM, boot ROM, PROM-based memory banking, system latch, I/O decoding, ROM
 loading, video (all three graphics modes, palette, hardware scroll), and the
-Z80 CTC, DART and PIO with mode 2 (daisy chain) interrupts. No keyboard,
-floppy or sound yet. The serial ports, printer port and cassette aren't
+Z80 CTC, DART and PIO with mode 2 (daisy chain) interrupts, and the keyboard.
+No floppy or sound yet. The serial ports, printer port and cassette aren't
 connected to the MiSTer's I/O yet.
 
 Video is 1024 x 256 at 50 Hz with 15.6 kHz line rate. HDMI works through the
 MiSTer scaler. Analog VGA users get 15 kHz video: the core doesn't scandouble
 to 31 kHz yet.
+
+## Keyboard
+
+Keys map by position, like MAME: on a Norwegian PC keyboard the letters, Ø,
+Æ, Å, +, -, ' and < are where the Tiki 100 has them. Tiki keys without a PC
+equivalent:
+
+| Tiki 100 | PC key |
+|---|---|
+| BRYTT | Esc |
+| SLETT | Backspace |
+| ANGRE | Delete |
+| GRAFIKK | Left Alt |
+| LOCK | Caps Lock |
+| UTVID | Insert |
+| HJEM | Home |
+| HTAB | Tab |
+| SIDEOPP / SIDENED | Page Up / Page Down |
+| @ | the key left of Backspace (\ on a Norwegian keyboard) |
+| ^ | the key left of Enter (¨ on a Norwegian keyboard) |
+| HJELP | F7 |
+| VTAB | F8 |
+| % (keypad) | Num Lock |
+| = (keypad) | F9 |
+
+Both Ctrl keys are CTRL and both Shift keys are SHIFT. The GRAFIKK key's LED
+shows on the MiSTer's user LED and the LOCK key's LED on the power LED.
 
 ## ROM files
 
@@ -74,6 +101,17 @@ interrupts, polled and interrupt-driven serial transfers on both DART
 channels, receive overrun, the DART's modified vectors, and interrupt
 priority between the CTC and the DART.
 
+    make kbdtest
+
+runs `sim/tests/kbdtest.asm`, which scans the keyboard like the TIKI ROM and
+writes the whole key matrix to port FF whenever it changes, while the key
+presses in `sim/tests/keys_kbdtest.txt` are replayed. The simulator gets them
+as PS/2 scancodes, like the MiSTer sends them; `sim/tests/mame_keys.py`
+presses the same Tiki keys in MAME. The simulator's `--keys FILE` option
+takes the same file format for any other test.
+`sim/tests/check_keymap.py` checks the scancode table against the key
+definitions in MAME's `tiki100.cpp` source.
+
 The T80 CPU is written in VHDL, which Verilator can't read. The Makefile uses
 GHDL to convert it into a Verilog netlist (`sim/obj/T80pa.v`) that is only
 used for simulation; Quartus builds from the original VHDL.
@@ -83,6 +121,12 @@ in its expansion slots. `sim/mame_trace.sh` empties the slots so MAME matches
 the core.
 
 ## Status
+
+Milestone 4 (keyboard): `make kbdtest` gives the same 33 key matrix states
+as MAME, and the scancode table agrees with all 88 keys MAME maps to PC
+keys. With the boot ROM, pressing B at frame 300 starts a disk boot that
+times out to "Sett inn en TIKI diskett og trykk B" (insert a TIKI disk and
+press B) by frame 850, as in MAME; frames 850 and 900 match MAME's.
 
 Milestone 3 (CTC, DART, PIO, interrupts): `make iotest` gives the same 48
 results as MAME. The boot trace now runs through the CTC's 62.5 Hz timer

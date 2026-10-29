@@ -5,6 +5,8 @@
 #   make frame      compare a video frame (FRAME, default 100) with a MAME snapshot
 #   make iotest     run the CTC/DART/PIO test ROM in the simulator and in MAME
 #                   and compare the results
+#   make kbdtest    replay key presses into the keyboard test ROM in the
+#                   simulator and in MAME and compare the key matrix scans
 #
 # Needs: verilator, ghdl, make, python3, z80asm, and mame for the references.
 # ROMSET is a MAME tiki100 or kontiki romset zip (not committed to git).
@@ -20,10 +22,10 @@ T80_SRC = $(T80)/T80_Pack.vhd $(T80)/T80_ALU.vhd $(T80)/T80_MCode.vhd \
           $(T80)/T80_Reg.vhd $(T80)/T80.vhd $(T80)/T80pa.vhd
 GHDL_FLAGS = --std=93c -fexplicit -fsynopsys --workdir=$(OBJ)
 
-RTL = sim_top.sv ../rtl/tiki100.sv ../rtl/tiki100_video.sv ../rtl/z80ctc.sv \
+RTL = sim_top.sv ../rtl/tiki100.sv ../rtl/tiki100_video.sv ../rtl/tiki100_keyboard.sv ../rtl/z80ctc.sv \
       ../rtl/z80dart.sv ../rtl/z80pio.sv
 
-.PHONY: all trace frame iotest roms clean
+.PHONY: all trace frame iotest kbdtest roms clean
 
 all: $(OBJ)/Vsim_top
 
@@ -75,6 +77,16 @@ iotest: $(OBJ)/Vsim_top $(OBJ)/boot.rom $(OBJ)/iotest.rom
 	sh tests/mame_results.sh $(OBJ)/iotest.rom $(OBJ)/boot1.rom $(OBJ)/iotest_mame.txt 1
 	diff $(OBJ)/iotest_mame.txt $(OBJ)/iotest_sim.txt
 	@echo "iotest: $$(wc -l < $(OBJ)/iotest_sim.txt) results, all match MAME"
+
+$(OBJ)/kbdtest.rom: tests/kbdtest.asm
+	mkdir -p $(OBJ)
+	z80asm -o $@ $<
+
+kbdtest: $(OBJ)/Vsim_top $(OBJ)/boot.rom $(OBJ)/kbdtest.rom
+	$(OBJ)/Vsim_top $(OBJ)/kbdtest.rom $(OBJ)/boot1.rom --frames 80 --keys tests/keys_kbdtest.txt --results $(OBJ)/kbdtest_sim.txt
+	python3 -I tests/mame_keys.py .. tests/keys_kbdtest.txt 80 --results $(OBJ)/kbdtest_mame.txt --rom $(OBJ)/kbdtest.rom --prom $(OBJ)/boot1.rom
+	diff $(OBJ)/kbdtest_mame.txt $(OBJ)/kbdtest_sim.txt
+	@echo "kbdtest: $$(grep -c A5 $(OBJ)/kbdtest_sim.txt) key matrix states, all match MAME"
 
 clean:
 	rm -rf $(OBJ)
