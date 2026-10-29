@@ -15,7 +15,16 @@ module sim_top
 	output        rd_n,
 	output [15:0] addr,
 	output  [7:0] din,
-	output  [7:0] sys_latch
+	output  [7:0] sys_latch,
+
+	output        ce_pix,
+	output  [7:0] vga_r,
+	output  [7:0] vga_g,
+	output  [7:0] vga_b,
+	output        hsync,
+	output        vsync,
+	output        hblank,
+	output        vblank
 );
 
 tiki100 core
@@ -29,9 +38,14 @@ tiki100 core
 	.key_col(),
 	.key_row(8'hFF),
 	.sys_latch(sys_latch),
-	.video_mode(),
-	.palette_val(),
-	.scroll()
+	.ce_pix(ce_pix),
+	.vga_r(vga_r),
+	.vga_g(vga_g),
+	.vga_b(vga_b),
+	.hsync(hsync),
+	.vsync(vsync),
+	.hblank(hblank),
+	.vblank(vblank)
 );
 
 assign m1_n   = core.cpu_m1_n;

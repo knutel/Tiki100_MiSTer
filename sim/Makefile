@@ -2,6 +2,7 @@
 #
 #   make            build the simulator
 #   make trace      run the boot ROM in the simulator and in MAME and compare traces
+#   make frame      compare a video frame (FRAME, default 100) with a MAME snapshot
 #
 # Needs: verilator, ghdl, make, python3, and mame for the reference trace.
 # ROMSET is a MAME tiki100 or kontiki romset zip (not committed to git).
@@ -9,6 +10,7 @@
 ROMSET ?= $(firstword $(wildcard ../tiki100.zip ../kontiki.zip))
 INSTRUCTIONS ?= 1000000
 MAME_SECONDS ?= 2
+FRAME ?= 100
 
 OBJ  = obj
 T80  = ../rtl/T80
@@ -16,9 +18,9 @@ T80_SRC = $(T80)/T80_Pack.vhd $(T80)/T80_ALU.vhd $(T80)/T80_MCode.vhd \
           $(T80)/T80_Reg.vhd $(T80)/T80.vhd $(T80)/T80pa.vhd
 GHDL_FLAGS = --std=93c -fexplicit -fsynopsys --workdir=$(OBJ)
 
-RTL = sim_top.sv ../rtl/tiki100.sv
+RTL = sim_top.sv ../rtl/tiki100.sv ../rtl/tiki100_video.sv
 
-.PHONY: all trace roms clean
+.PHONY: all trace frame roms clean
 
 all: $(OBJ)/Vsim_top
 
@@ -44,7 +46,7 @@ $(OBJ)/boot.rom: $(ROMSET)
 	python3 -I extract_roms.py $(ROMSET) $(OBJ)
 
 $(OBJ)/sim_trace.txt: $(OBJ)/Vsim_top $(OBJ)/boot.rom
-	$(OBJ)/Vsim_top $(OBJ)/boot.rom $(OBJ)/boot1.rom $@ $(INSTRUCTIONS)
+	$(OBJ)/Vsim_top $(OBJ)/boot.rom $(OBJ)/boot1.rom --trace $@ --instructions $(INSTRUCTIONS)
 
 $(OBJ)/mame_trace.log: $(ROMSET)
 	mkdir -p $(OBJ)
@@ -52,6 +54,14 @@ $(OBJ)/mame_trace.log: $(ROMSET)
 
 trace: $(OBJ)/sim_trace.txt $(OBJ)/mame_trace.log
 	python3 -I compare_trace.py $(OBJ)/mame_trace.log $(OBJ)/sim_trace.txt
+
+frame: $(OBJ)/Vsim_top $(OBJ)/boot.rom $(OBJ)/mame_frame_$(FRAME).png
+	$(OBJ)/Vsim_top $(OBJ)/boot.rom $(OBJ)/boot1.rom --frames $$(($(FRAME) + 1)) --dump $(FRAME) --outdir $(OBJ)
+	python3 -I compare_frame.py $(OBJ)/mame_frame_$(FRAME).png $(OBJ)/frame_$$(printf %04d $(FRAME)).ppm $(OBJ)/diff_$(FRAME).png
+
+$(OBJ)/mame_frame_%.png: $(ROMSET)
+	mkdir -p $(OBJ)
+	sh mame_snap.sh $(dir $(abspath $(ROMSET))) $@ $*
 
 clean:
 	rm -rf $(OBJ)

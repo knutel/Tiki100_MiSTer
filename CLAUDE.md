@@ -202,7 +202,7 @@ Do these in order. Each one should be simulated before it's tried on hardware.
 4. **Keyboard.** PS/2 to matrix.
 5. **Floppy.** FD1797 plus disk mounting. Done when TIKO boots from a disk image.
 6. **Sound.** AY-3-8912 through the framework's audio output.
-7. **Extras.** Writing disk changes back to SD, cassette via MiSTer's ADC input, serial, printer, ROM version selection in the menu, per-16-dot video timing.
+7. **Extras.** Writing disk changes back to SD, cassette via MiSTer's ADC input, serial, printer, ROM version selection in the menu, per-16-dot video timing (`PER_GROUP`), optional 31 kHz scandoubled analog VGA output (needs a `CLK_VIDEO` of at least 4× the 20 MHz dot clock for `video_mixer`).
 
 ## Links
 

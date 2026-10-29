@@ -4,8 +4,13 @@ An FPGA recreation of the Tiki 100 (Tiki Data, Oslo, 1984), a Z80 home and
 school computer. MAME's `tiki100` driver is used as the hardware reference.
 
 Work in progress. Implemented so far: Z80 CPU (T80), 64 KB RAM, 32 KB video
-RAM, boot ROM, PROM-based memory banking, system latch, I/O decoding and ROM
-loading. No video, keyboard, floppy, sound or interrupts yet.
+RAM, boot ROM, PROM-based memory banking, system latch, I/O decoding, ROM
+loading and video (all three graphics modes, palette, hardware scroll). No
+keyboard, floppy, sound or interrupts yet.
+
+Video is 1024 x 256 at 50 Hz with 15.6 kHz line rate. HDMI works through the
+MiSTer scaler. Analog VGA users get 15 kHz video: the core doesn't scandouble
+to 31 kHz yet.
 
 ## ROM files
 
@@ -42,6 +47,13 @@ records a MAME trace of the same boot and reports the first instruction where
 they differ. Options: `ROMSET=path/to/zip`, `INSTRUCTIONS=n`,
 `MAME_SECONDS=n`.
 
+    make frame
+
+runs the core for 100 frames (2 seconds), saves the last one as
+`obj/frame_0100.png`, takes a MAME snapshot of the same frame and compares
+them pixel by pixel. Differences are marked red in `obj/diff_100.png`. Use
+`FRAME=n` for another frame.
+
 The T80 CPU is written in VHDL, which Verilator can't read. The Makefile uses
 GHDL to convert it into a Verilog netlist (`sim/obj/T80pa.v`) that is only
 used for simulation; Quartus builds from the original VHDL.
@@ -51,6 +63,11 @@ in its expansion slots. `sim/mame_trace.sh` empties the slots so MAME matches
 the core.
 
 ## Status
+
+Milestone 2 (video): frame 100 of the boot (the "TIKI 100 / Monitor - ver
+2.03 W" banner) matches MAME's snapshot pixel for pixel. Mode and scroll
+changes take effect once per line, like MAME; set `PER_GROUP` to 1 in
+`rtl/tiki100_video.sv` to apply them every 16 dots like the real hardware.
 
 Milestone 1 (CPU, memory, banking, I/O decode) matches MAME's trace for the
 first 916,222 instructions of TIKI ROM 2.03w. That covers the RAM and video

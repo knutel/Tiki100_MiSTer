@@ -113,51 +113,6 @@ pll pll
 
 wire reset = RESET | status[0] | buttons[1];
 
-wire HBlank;
-wire HSync;
-wire VBlank;
-wire VSync;
-wire ce_pix;
-wire hvcnt_atzero;
-wire [7:0] video;
-
-// Leave H/V sync always on. This stabilizes the video output while the core
-// is in reset. This example releases the reset when H/V counters are at zero.
-reg reset_core = 1;
-always @(posedge clk_sys) begin
-	if(reset) reset_core <= 1;
-	else if(hvcnt_atzero) reset_core <= 0;
-end
-
-mycore mycore
-(
-	.clk(clk_sys),
-	.reset(reset_core),
-
-	.pal(1'b1),
-	.scandouble(forced_scandoubler),
-
-	.ce_pix(ce_pix),
-	.hvcnt_atzero(hvcnt_atzero),
-
-	.HBlank(HBlank),
-	.HSync(HSync),
-	.VBlank(VBlank),
-	.VSync(VSync),
-
-	.video(video)
-);
-
-assign CLK_VIDEO = clk_sys;
-assign CE_PIXEL = ce_pix;
-
-assign VGA_DE = ~(HBlank | VBlank);
-assign VGA_HS = HSync;
-assign VGA_VS = VSync;
-assign VGA_G  = video;
-assign VGA_R  = video;
-assign VGA_B  = video;
-
 ///////////////////////   TIKI 100   /////////////////////////////
 
 // Main_MiSTer loads boot.rom with index 0 and boot1.rom with index 0x40
@@ -166,6 +121,7 @@ wire rom_wr  = ioctl_download && ioctl_wr && ioctl_index[7:6] == 2'd0 && ioctl_a
 wire prom_wr = ioctl_download && ioctl_wr && ioctl_index[7:6] == 2'd1 && ioctl_addr < 27'h100;
 
 wire [7:0] sys_latch;
+wire       ce_pix, HSync, VSync, HBlank, VBlank;
 
 tiki100 tiki100
 (
@@ -181,10 +137,25 @@ tiki100 tiki100
 	.key_row(8'hFF),                  // milestone 4: PS/2 keyboard matrix
 
 	.sys_latch(sys_latch),
-	.video_mode(),
-	.palette_val(),
-	.scroll()
+
+	.ce_pix(ce_pix),
+	.vga_r(VGA_R),
+	.vga_g(VGA_G),
+	.vga_b(VGA_B),
+	.hsync(HSync),
+	.vsync(VSync),
+	.hblank(HBlank),
+	.vblank(VBlank)
 );
+
+// Video goes straight to the framework. CLK_VIDEO is only 2x the dot clock,
+// too slow for video_mixer's scandoubler, so analog VGA gets 15 kHz video.
+// HDMI goes through the framework's scaler and is unaffected.
+assign CLK_VIDEO = clk_sys;
+assign CE_PIXEL  = ce_pix;
+assign VGA_DE    = ~(HBlank | VBlank);
+assign VGA_HS    = HSync;
+assign VGA_VS    = VSync;
 
 // GRAFIKK key LED (system latch bit 5) on the user LED,
 // drive 0 select (bit 0) on the disk LED.

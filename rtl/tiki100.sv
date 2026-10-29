@@ -1,3 +1,4 @@
+`default_nettype none
 //============================================================================
 //  Tiki 100 core
 //
@@ -35,11 +36,18 @@ module tiki100
 	output  [3:0] key_col,
 	input   [7:0] key_row,
 
-	// Registers used by later milestones
-	output  [7:0] sys_latch,    // ports 1C-1F: drive select, ROME, VIRE, density, LEDs, motor
-	output  [7:0] video_mode,   // ports 0C-0F
-	output  [7:0] palette_val,  // ports 14-15 (stored inverted, as written)
-	output  [7:0] scroll        // AY port A
+	// System latch (ports 1C-1F): drive select, ROME, VIRE, density, LEDs, motor
+	output  [7:0] sys_latch,
+
+	// Video, 20 MHz dot clock enable on clk
+	output        ce_pix,
+	output  [7:0] vga_r,
+	output  [7:0] vga_g,
+	output  [7:0] vga_b,
+	output        hsync,
+	output        vsync,        // also the hook for demos that read VSYNC on a PIO pin (MAME TODO)
+	output        hblank,
+	output        vblank
 );
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -104,6 +112,8 @@ assign sys_latch = syl;
 wire rome = syl[2];   // _ROME: 0 maps the ROM in
 wire vire = syl[3];
 
+reg [7:0] scroll_r;   // AY port A, see the AY stub below
+
 ////////////////////////////////////////////////////////////////////////////////
 // Memory banking
 //
@@ -131,15 +141,19 @@ always @(posedge clk) begin
 end
 
 // 32 KB video RAM. The CPU sees it offset by the scroll register, so that
-// scrolling the screen also scrolls the CPU's view of it.
-// Milestone 2 adds a second port here for the video shifter.
-wire [14:0] vram_a = cpu_a[14:0] + {scroll, 7'd0};
+// scrolling the screen also scrolls the CPU's view of it. The second port
+// belongs to the video shifter.
+wire [14:0] vram_a = cpu_a[14:0] + {scroll_r, 7'd0};
 reg   [7:0] vram[32768];
 reg   [7:0] vram_q;
 always @(posedge clk) begin
 	if (mem_wr && sel_vir) vram[vram_a] <= cpu_do;
 	vram_q <= vram[vram_a];
 end
+
+wire [14:0] vid_addr;
+reg   [7:0] vid_data;
+always @(posedge clk) vid_data <= vram[vid_addr];
 
 // 8 KB boot ROM in a 16 KB window; the upper 8 KB (an empty socket) reads FF.
 // ROM1 always addresses that upper half.
@@ -184,8 +198,6 @@ wire io_syl  = io_hit && io_grp == IO_SYL;
 // Register writes. These are level-triggered: writing the same value on
 // every clock while WR is low is harmless.
 reg [7:0] mode_r, palv_r;
-assign video_mode  = mode_r;
-assign palette_val = palv_r;
 
 always @(posedge clk) begin
 	if (reset) begin
@@ -230,8 +242,6 @@ wire [7:0] key_dout = (key_cnt < 4'd13) ? key_row : 8'hFF;
 
 reg [3:0] ay_addr;
 reg [7:0] ay_reg[16];
-reg [7:0] scroll_r;
-assign scroll = scroll_r;
 
 always @(posedge clk) begin
 	if (reset) begin
@@ -264,6 +274,27 @@ wire [7:0] ay_dout = (ay_addr == 4'd14 && !ay_reg[7][6]) ? 8'hFF :   // port A a
                                                            ay_reg[ay_addr] & ay_mask;
 
 ////////////////////////////////////////////////////////////////////////////////
+// Video
+
+tiki100_video video
+(
+	.clk(clk),
+	.mode(mode_r),
+	.palette_val(palv_r),
+	.scroll(scroll_r),
+	.vram_addr(vid_addr),
+	.vram_data(vid_data),
+	.ce_pix(ce_pix),
+	.r(vga_r),
+	.g(vga_g),
+	.b(vga_b),
+	.hsync(hsync),
+	.vsync(vsync),
+	.hblank(hblank),
+	.vblank(vblank)
+);
+
+////////////////////////////////////////////////////////////////////////////////
 // I/O read data
 
 reg [7:0] io_dout;
@@ -285,3 +316,4 @@ end
 assign cpu_di = (~cpu_iorq_n & cpu_m1_n) ? io_dout : mem_dout;
 
 endmodule
+`default_nettype wire
