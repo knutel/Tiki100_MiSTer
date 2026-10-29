@@ -138,6 +138,23 @@ tiki100 tiki100
 
 	.sys_latch(sys_latch),
 
+	// Serial, printer and cassette are not connected yet (milestone 7).
+	// Idle levels as in MAME: no data on RxD, CTS and DCD active, and the
+	// printer port reports ACK and NO PAPER high like MAME's default printer.
+	.ser_rxd(2'b11),
+	.ser_txd(),
+	.ser_cts_n(2'b00),
+	.ser_dcd_n(2'b00),
+	.ser_rts_n(),
+	.ser_dtr_n(),
+	.par_data(),
+	.par_strobe(),
+	.par_ack(1'b1),
+	.par_busy(1'b0),
+	.par_perror(1'b1),
+	.tape_out(),
+	.tape_in(1'b0),
+
 	.ce_pix(ce_pix),
 	.vga_r(VGA_R),
 	.vga_g(VGA_G),

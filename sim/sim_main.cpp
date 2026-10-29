@@ -12,6 +12,9 @@
 //   --frames N          stop after N video frames
 //   --dump K            save frame K (repeatable) as frame_KKKK.ppm
 //   --outdir DIR        where to save frames (default .)
+//   --results FILE      write every byte the CPU writes to port FF (the
+//                       test ROMs' result port) to FILE, one hex byte per line
+//   --loopback 1        connect each DART channel's TxD to its RxD
 //
 // Debug switches (environment variables):
 //   TRACE_BYTES=1  print the first 20 opcode fetches with the byte read
@@ -59,7 +62,8 @@ int main(int argc, char **argv)
 	std::vector<unsigned char> rom  = load(argv[1]);
 	std::vector<unsigned char> prom = load(argv[2]);
 
-	FILE *trace = nullptr;
+	FILE *trace = nullptr, *results = nullptr;
+	bool loopback = false;
 	long max_instr = -1, max_frames = -1;
 	std::set<long> dump;
 	std::string outdir = ".";
@@ -72,12 +76,15 @@ int main(int argc, char **argv)
 		else if (a == "--frames")       max_frames = atol(v);
 		else if (a == "--dump")         dump.insert(atol(v));
 		else if (a == "--outdir")       outdir = v;
+		else if (a == "--results")      { results = fopen(v, "w"); if (!results) { perror(v); return 1; } }
+		else if (a == "--loopback")     loopback = atoi(v) != 0;
 		else { fprintf(stderr, "unknown option %s\n", a.c_str()); return 1; }
 	}
 	if (max_instr < 0 && max_frames < 0) max_frames = 1;
 
 	Verilated::commandArgs(argc, argv);
 	Vsim_top *top = new Vsim_top;
+	top->loopback = loopback;
 
 	auto tick = [&]() {
 		top->clk = 0; top->eval();
@@ -105,7 +112,10 @@ int main(int argc, char **argv)
 	long count = 0;
 	bool in_fetch = false, prefixed = false;
 	unsigned fetch_addr = 0, fetch_byte = 0;
+	unsigned long long fetch_clk = 0, instr_clk = 0;
+	bool trace_cycles = getenv("TRACE_CYCLES") != nullptr;   // add the CPU cycle count to each trace line
 	unsigned last_latch = 0;
+	bool last_io_write = false;
 
 	// Video capture state. Pixels are taken on ce_pix outside blanking; a frame
 	// ends at the start of vertical blanking.
@@ -126,20 +136,29 @@ int main(int argc, char **argv)
 
 		bool fetch = !top->m1_n && !top->mreq_n && !top->rd_n;
 		if (fetch) {
-			if (!in_fetch) fetch_addr = top->addr;
+			if (!in_fetch) { fetch_addr = top->addr; fetch_clk = cycles; }
 			fetch_byte = top->din;
 		}
 		else if (in_fetch) {
 			if (getenv("TRACE_BYTES") && count < 20)
 				fprintf(stderr, "fetch %04X = %02X\n", fetch_addr, fetch_byte);
+			if (!prefixed) instr_clk = fetch_clk;
 			if (!prefixed) {
-				if (trace) fprintf(trace, "%04X\n", fetch_addr);
+				if (trace && trace_cycles) fprintf(trace, "%04X %llu\n", fetch_addr, instr_clk / 10);
+				else if (trace)            fprintf(trace, "%04X\n", fetch_addr);
 				count++;
 			}
 			prefixed = (fetch_byte == 0xDD || fetch_byte == 0xFD) ||
 			           ((fetch_byte == 0xCB || fetch_byte == 0xED) && !prefixed);
 		}
 		in_fetch = fetch;
+
+		bool io_write = !top->iorq_n && !top->wr_n;
+		if (io_write && !last_io_write && results && (top->addr & 0xFF) == 0xFF) {
+			fprintf(results, "%02X\n", top->dout);
+			fflush(results);
+		}
+		last_io_write = io_write;
 
 		if (top->sys_latch != last_latch) {
 			if (getenv("TRACE_LATCH"))
@@ -189,6 +208,7 @@ int main(int argc, char **argv)
 	fprintf(stderr, "%ld instructions, %ld frames, %llu clocks (%.3f s at 40 MHz)\n",
 	        count, frames, cycles, cycles / 40e6);
 	if (trace) fclose(trace);
+	if (results) fclose(results);
 	top->final();
 	delete top;
 	return 0;

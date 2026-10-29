@@ -5,8 +5,10 @@ school computer. MAME's `tiki100` driver is used as the hardware reference.
 
 Work in progress. Implemented so far: Z80 CPU (T80), 64 KB RAM, 32 KB video
 RAM, boot ROM, PROM-based memory banking, system latch, I/O decoding, ROM
-loading and video (all three graphics modes, palette, hardware scroll). No
-keyboard, floppy, sound or interrupts yet.
+loading, video (all three graphics modes, palette, hardware scroll), and the
+Z80 CTC, DART and PIO with mode 2 (daisy chain) interrupts. No keyboard,
+floppy or sound yet. The serial ports, printer port and cassette aren't
+connected to the MiSTer's I/O yet.
 
 Video is 1024 x 256 at 50 Hz with 15.6 kHz line rate. HDMI works through the
 MiSTer scaler. Analog VGA users get 15 kHz video: the core doesn't scandouble
@@ -31,10 +33,10 @@ CPU can't see the ROM.
 
 ## Simulation
 
-Needs `make`, `verilator`, `ghdl`, `python3`, and `mame` for the reference
-trace:
+Needs `make`, `verilator`, `ghdl`, `python3`, `z80asm` for the test ROM, and
+`mame` for the reference runs:
 
-    sudo apt install make verilator ghdl mame
+    sudo apt install make verilator ghdl z80asm mame
 
 Put a `tiki100.zip` or `kontiki.zip` romset in the repository root (it's
 ignored by git), then:
@@ -47,12 +49,30 @@ records a MAME trace of the same boot and reports the first instruction where
 they differ. Options: `ROMSET=path/to/zip`, `INSTRUCTIONS=n`,
 `MAME_SECONDS=n`.
 
+MAME's scheduler sometimes takes an interrupt an instruction or two earlier or
+later than the core does (the core is cycle-exact; MAME runs the CPU in time
+slices). The comparison allows for that: when the traces disagree it looks
+for a small skip on either side after which they agree again, and reports
+each one as a "resync". Use `--strict` with `compare_trace.py` to turn this
+off.
+
     make frame
 
 runs the core for 100 frames (2 seconds), saves the last one as
 `obj/frame_0100.png`, takes a MAME snapshot of the same frame and compares
 them pixel by pixel. Differences are marked red in `obj/diff_100.png`. Use
 `FRAME=n` for another frame.
+
+    make iotest
+
+assembles `sim/tests/iotest.asm`, a test program for the CTC, DART and PIO,
+and runs it in place of the boot ROM in both the simulator and MAME, with
+both serial ports looped back (TxD to RxD). The program writes its results
+to port FF, which nothing decodes; the two result lists must be identical.
+It covers the PIO registers and bit control interrupt, CTC timer and counter
+interrupts, polled and interrupt-driven serial transfers on both DART
+channels, receive overrun, the DART's modified vectors, and interrupt
+priority between the CTC and the DART.
 
 The T80 CPU is written in VHDL, which Verilator can't read. The Makefile uses
 GHDL to convert it into a Verilog netlist (`sim/obj/T80pa.v`) that is only
@@ -64,6 +84,16 @@ the core.
 
 ## Status
 
+Milestone 3 (CTC, DART, PIO, interrupts): `make iotest` gives the same 48
+results as MAME. The boot trace now runs through the CTC's 62.5 Hz timer
+interrupts and matches all 1,598,393 instructions MAME traced (`MAME_SECONDS=4`),
+with 4 resyncs where MAME took a timer interrupt one instruction earlier or
+later than the core. Frame 300 (6 seconds in, with the monitor's cursor below
+the banner) matches MAME's snapshot. The CTC, DART and PIO are new modules
+(`rtl/z80ctc.sv`, `rtl/z80dart.sv`, `rtl/z80pio.sv`) written from MAME's
+`z80ctc.cpp`, `z80sio.cpp` and `z80pio.cpp`; the DART only does asynchronous
+serial, which is all a DART can do.
+
 Milestone 2 (video): frame 100 of the boot (the "TIKI 100 / Monitor - ver
 2.03 W" banner) matches MAME's snapshot pixel for pixel. Mode and scroll
 changes take effect once per line, like MAME; set `PER_GROUP` to 1 in
@@ -72,5 +102,5 @@ changes take effect once per line, like MAME; set `PER_GROUP` to 1 in
 Milestone 1 (CPU, memory, banking, I/O decode) matches MAME's trace for the
 first 916,222 instructions of TIKI ROM 2.03w. That covers the RAM and video
 RAM tests, the move to high RAM and the switch to the RAM/VRAM memory map.
-The traces diverge where the ROM enables interrupts and MAME takes the first
-CTC interrupt, which this core doesn't have yet.
+At that point the ROM enables interrupts and MAME takes the first CTC
+interrupt, which came with milestone 3.

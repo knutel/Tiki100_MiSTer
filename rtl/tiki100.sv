@@ -39,6 +39,23 @@ module tiki100
 	// System latch (ports 1C-1F): drive select, ROME, VIRE, density, LEDs, motor
 	output  [7:0] sys_latch,
 
+	// Serial ports (DART): channel A in bit 0, channel B in bit 1
+	input   [1:0] ser_rxd,
+	output  [1:0] ser_txd,
+	input   [1:0] ser_cts_n,
+	input   [1:0] ser_dcd_n,
+	output  [1:0] ser_rts_n,
+	output  [1:0] ser_dtr_n,
+
+	// Centronics printer and cassette (PIO)
+	output  [7:0] par_data,
+	output        par_strobe,
+	input         par_ack,
+	input         par_busy,
+	input         par_perror,
+	output        tape_out,
+	input         tape_in,
+
 	// Video, 20 MHz dot clock enable on clk
 	output        ce_pix,
 	output  [7:0] vga_r,
@@ -63,6 +80,12 @@ always @(posedge clk) cpu_div <= (cpu_div == 4'd9) ? 4'd0 : cpu_div + 4'd1;
 wire cpu_cen_p = (cpu_div == 4'd0);
 wire cpu_cen_n = (cpu_div == 4'd5);
 
+// The CTC, DART and PIO run at 2 MHz: one enable pulse every 20 clocks.
+reg [4:0] per_div;
+always @(posedge clk) per_div <= (per_div == 5'd19) ? 5'd0 : per_div + 5'd1;
+
+wire ce_2m = (per_div == 5'd0);
+
 ////////////////////////////////////////////////////////////////////////////////
 // CPU
 
@@ -70,6 +93,7 @@ wire [15:0] cpu_a;
 wire  [7:0] cpu_do;
 wire  [7:0] cpu_di;
 wire        cpu_m1_n, cpu_mreq_n, cpu_iorq_n, cpu_rd_n, cpu_wr_n, cpu_rfsh_n, cpu_halt_n;
+wire        cpu_int;    // from the interrupt daisy chain
 
 T80pa cpu
 (
@@ -78,7 +102,7 @@ T80pa cpu
 	.CEN_p(cpu_cen_p),
 	.CEN_n(cpu_cen_n),
 	.WAIT_n(1'b1),
-	.INT_n(1'b1),           // milestone 3: CTC/DART/PIO daisy chain
+	.INT_n(~cpu_int),
 	.NMI_n(1'b1),
 	.BUSRQ_n(1'b1),
 	.M1_n(cpu_m1_n),
@@ -102,6 +126,12 @@ T80pa cpu
 wire mem_wr = ~cpu_mreq_n & ~cpu_wr_n;
 wire io_rd  = ~cpu_iorq_n & ~cpu_rd_n & cpu_m1_n;   // M1+IORQ is an interrupt acknowledge, not an I/O read
 wire io_wr  = ~cpu_iorq_n & ~cpu_wr_n;
+
+// The CTC, DART and PIO need exactly one write per OUT instruction, so they
+// get a pulse at the start of the write.
+reg  io_wr_d;
+always @(posedge clk) io_wr_d <= io_wr;
+wire io_wr_p = io_wr & ~io_wr_d;
 
 ////////////////////////////////////////////////////////////////////////////////
 // System latch (ports 1C-1F)
@@ -182,12 +212,12 @@ wire       io_hit = (cpu_a[7:5] == 3'd0);
 wire [2:0] io_grp = cpu_a[4:2];
 
 localparam IO_KEYS = 3'd0;  // keyboard
-localparam IO_SERS = 3'd1;  // Z80 DART (milestone 3)
-localparam IO_PARS = 3'd2;  // Z80 PIO (milestone 3)
+localparam IO_SERS = 3'd1;  // Z80 DART
+localparam IO_PARS = 3'd2;  // Z80 PIO
 localparam IO_VIPB = 3'd3;  // video mode
 localparam IO_FLOP = 3'd4;  // FD1797 (milestone 5)
 localparam IO_VIPS = 3'd5;  // palette, AY-3-8912
-localparam IO_TIMS = 3'd6;  // Z80 CTC (milestone 3)
+localparam IO_TIMS = 3'd6;  // Z80 CTC
 localparam IO_SYL  = 3'd7;  // system latch
 
 wire io_keys = io_hit && io_grp == IO_KEYS;
@@ -274,6 +304,188 @@ wire [7:0] ay_dout = (ay_addr == 4'd14 && !ay_reg[7][6]) ? 8'hFF :   // port A a
                                                            ay_reg[ay_addr] & ay_mask;
 
 ////////////////////////////////////////////////////////////////////////////////
+// Interrupts
+//
+// Z80 mode 2 interrupts through a daisy chain: CTC (highest priority), DART,
+// PIO. A device may interrupt when every device above it in the chain is
+// idle (IEI high). When the CPU acknowledges (M1 and IORQ low together,
+// MREQ high), the highest-priority requester supplies the vector and marks
+// that interrupt as under service, which blocks itself and everything below
+// it until the CPU executes RETI (ED 4D). Like the real chips, the devices
+// recognise RETI by watching the opcode fetches.
+
+wire       ctc_int, ctc_ieo;
+wire [7:0] ctc_vector;
+wire       dart_int, dart_ieo;
+wire [7:0] dart_vector;
+wire       pio_int;
+wire [7:0] pio_vector;
+
+assign cpu_int = ctc_int | dart_int | pio_int;
+
+wire intack_cyc = ~cpu_m1_n & ~cpu_iorq_n & cpu_mreq_n;
+reg  intack_d;
+always @(posedge clk) intack_d <= intack_cyc;
+wire intack_p = intack_cyc & ~intack_d;
+
+wire [7:0] int_vector = ctc_int  ? ctc_vector  :
+                        dart_int ? dart_vector :
+                        pio_int  ? pio_vector  :
+                                   8'hFF;
+reg  [7:0] int_vector_q;
+always @(posedge clk) if (intack_p) int_vector_q <= int_vector;
+
+// RETI detection: an ED prefix followed by 4D, both fetched in M1 cycles.
+// After a CB prefix the next byte is the opcode even if it is ED (CB ED is
+// SET 5,L), so that ED doesn't count as a prefix.
+wire       op_fetch = ~cpu_m1_n & ~cpu_mreq_n & ~cpu_rd_n;
+reg        op_fetch_d;
+reg  [7:0] op_q;
+reg        pfx_cb, pfx_ed;   // the previous opcode fetch was a CB or ED prefix
+reg        reti;
+
+always @(posedge clk) begin
+	op_fetch_d <= op_fetch;
+	reti <= 1'b0;
+	if (reset) begin
+		pfx_cb <= 1'b0;
+		pfx_ed <= 1'b0;
+	end
+	else begin
+		if (op_fetch) op_q <= cpu_di;
+		if (op_fetch_d && !op_fetch) begin
+			reti   <= pfx_ed && op_q == 8'h4D;
+			pfx_ed <= !pfx_cb && !pfx_ed && op_q == 8'hED;
+			pfx_cb <= !pfx_cb && !pfx_ed && op_q == 8'hCB;
+		end
+	end
+end
+
+////////////////////////////////////////////////////////////////////////////////
+// Z80 CTC (ports 18-1B)
+//
+// TRG0 and TRG1 count a 2 MHz clock. Channel 0's output (BAR0) clocks
+// channel 2 and the DART's channel A receiver; channel 2's output (BAR2)
+// clocks channel 3 and the DART's channel A transmitter (the ST jumper, set
+// to BAR2 as in MAME); channel 1 clocks both directions of DART channel B.
+
+wire [7:0] ctc_dout;
+wire [3:0] ctc_zc;
+
+z80ctc ctc
+(
+	.clk(clk),
+	.reset(reset),
+	.ce(ce_2m),
+	.wr(io_wr_p && io_hit && io_grp == IO_TIMS),
+	.ch_sel(cpu_a[1:0]),
+	.din(cpu_do),
+	.dout(ctc_dout),
+	.iei(1'b1),
+	.ieo(ctc_ieo),
+	.int_req(ctc_int),
+	.intack(intack_p & ctc_int),
+	.vector(ctc_vector),
+	.reti(reti),
+	.trg({ctc_zc[2], ctc_zc[0], ce_2m, ce_2m}),
+	.zc_to(ctc_zc)
+);
+
+wire bar0 = ctc_zc[0];
+wire bar1 = ctc_zc[1];
+wire bar2 = ctc_zc[2];
+
+////////////////////////////////////////////////////////////////////////////////
+// Z80 DART (ports 04-07)
+//
+// A0 selects the channel (0 = A, 1 = B) and A1 control/data (1 = control),
+// like MAME's cd_ba addressing. Reading the data register or a status
+// register has side effects, so the DART is told when a read has finished.
+
+localparam ST = 1'b1;   // ST jumper: channel A transmit clock from BAR2 (1) or BAR0 (0)
+
+wire [7:0] dart_dout;
+wire       dart_sel = io_hit && io_grp == IO_SERS;
+reg        dart_rd_d;
+reg  [1:0] dart_rd_a;
+always @(posedge clk) begin
+	dart_rd_d <= io_rd && dart_sel;
+	if (io_rd && dart_sel) dart_rd_a <= cpu_a[1:0];
+end
+wire dart_rd_done = dart_rd_d && !(io_rd && dart_sel);
+
+z80dart dart
+(
+	.clk(clk),
+	.reset(reset),
+	.wr(io_wr_p && dart_sel),
+	.rd_done(dart_rd_done),
+	.ch_sel(dart_rd_done ? dart_rd_a[0] : cpu_a[0]),
+	.cd_sel(dart_rd_done ? dart_rd_a[1] : cpu_a[1]),
+	.din(cpu_do),
+	.dout(dart_dout),
+	.iei(ctc_ieo),
+	.ieo(dart_ieo),
+	.int_req(dart_int),
+	.intack(intack_p & ~ctc_int & dart_int),
+	.vector(dart_vector),
+	.reti(reti),
+	.rxc({bar1, bar0}),
+	.txc({bar1, ST ? bar2 : bar0}),
+	.rxd(ser_rxd),
+	.txd(ser_txd),
+	.cts_n(ser_cts_n),
+	.dcd_n(ser_dcd_n),
+	.ri_n(2'b00),           // not connected; reads as active, like MAME
+	.rts_n(ser_rts_n),
+	.dtr_n(ser_dtr_n)
+);
+
+////////////////////////////////////////////////////////////////////////////////
+// Z80 PIO (ports 08-0B)
+//
+// A0 selects the port (0 = A, 1 = B) and A1 control/data (1 = control).
+// Port A is the Centronics data bus. Port B: bit 0 strobe (out), 4 ACK,
+// 5 BUSY, 6 tape out / NO PAPER in, 7 tape in. The strobe inputs are not
+// connected; like MAME they stay low, so input reads see the pins directly.
+// (MAME TODO: some demos expect VSYNC on a PIO pin. vsync is available here
+// if a schematic shows where it goes.)
+
+wire [7:0] pio_dout;
+wire [7:0] pa_out, pb_out;
+
+z80pio pio
+(
+	.clk(clk),
+	.reset(reset),
+	.wr(io_wr_p && io_hit && io_grp == IO_PARS),
+	.port_sel(cpu_a[0]),
+	.cd_sel(cpu_a[1]),
+	.din(cpu_do),
+	.dout(pio_dout),
+	.iei(dart_ieo),
+	.ieo(),
+	.int_req(pio_int),
+	.intack(intack_p & ~ctc_int & ~dart_int & pio_int),
+	.vector(pio_vector),
+	.reti(reti),
+	.pa_in(8'hFF),        // Centronics data lines read back nothing
+	.pa_out(pa_out),
+	.pa_oe(),
+	.astb_n(1'b0),
+	.ardy(),
+	.pb_in({tape_in, par_perror, par_busy, par_ack, 4'b0000}),
+	.pb_out(pb_out),
+	.pb_oe(),
+	.bstb_n(1'b0),
+	.brdy()
+);
+
+assign par_data   = pa_out;
+assign par_strobe = pb_out[0];
+assign tape_out   = pb_out[6];
+
+////////////////////////////////////////////////////////////////////////////////
 // Video
 
 tiki100_video video
@@ -304,16 +516,21 @@ always @(*) begin
 		case (io_grp)
 			IO_KEYS: io_dout = key_dout;
 			IO_VIPS: if (cpu_a[1:0] == 2'd3) io_dout = ay_dout;
-			default: io_dout = 8'hFF;   // DART, PIO, FDC, CTC come in later milestones
+			IO_SERS: io_dout = dart_dout;
+			IO_PARS: io_dout = pio_dout;
+			IO_TIMS: io_dout = ctc_dout;
+			default: io_dout = 8'hFF;   // the FDC comes in milestone 5
 		endcase
 	end
 end
 
-// IORQ together with M1 is an interrupt acknowledge, not an I/O read
-// (milestone 3 puts the daisy chain's vector on the bus there). Note that
-// T80pa doesn't reset IntCycleD_n, so its first M1 cycle after power-up
-// also shows IORQ low; that fetch must still read memory.
-assign cpu_di = (~cpu_iorq_n & cpu_m1_n) ? io_dout : mem_dout;
+// IORQ together with M1 is an interrupt acknowledge, not an I/O read: the
+// daisy chain puts its vector on the bus. Note that T80pa doesn't reset
+// IntCycleD_n, so its first M1 cycle after power-up also shows IORQ low;
+// that fetch has MREQ low and must still read memory.
+assign cpu_di = intack_cyc               ? (intack_p ? int_vector : int_vector_q) :
+                (~cpu_iorq_n & cpu_m1_n) ? io_dout :
+                                           mem_dout;
 
 endmodule
 `default_nettype wire

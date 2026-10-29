@@ -3,8 +3,10 @@
 #   make            build the simulator
 #   make trace      run the boot ROM in the simulator and in MAME and compare traces
 #   make frame      compare a video frame (FRAME, default 100) with a MAME snapshot
+#   make iotest     run the CTC/DART/PIO test ROM in the simulator and in MAME
+#                   and compare the results
 #
-# Needs: verilator, ghdl, make, python3, and mame for the reference trace.
+# Needs: verilator, ghdl, make, python3, z80asm, and mame for the references.
 # ROMSET is a MAME tiki100 or kontiki romset zip (not committed to git).
 
 ROMSET ?= $(firstword $(wildcard ../tiki100.zip ../kontiki.zip))
@@ -18,9 +20,10 @@ T80_SRC = $(T80)/T80_Pack.vhd $(T80)/T80_ALU.vhd $(T80)/T80_MCode.vhd \
           $(T80)/T80_Reg.vhd $(T80)/T80.vhd $(T80)/T80pa.vhd
 GHDL_FLAGS = --std=93c -fexplicit -fsynopsys --workdir=$(OBJ)
 
-RTL = sim_top.sv ../rtl/tiki100.sv ../rtl/tiki100_video.sv
+RTL = sim_top.sv ../rtl/tiki100.sv ../rtl/tiki100_video.sv ../rtl/z80ctc.sv \
+      ../rtl/z80dart.sv ../rtl/z80pio.sv
 
-.PHONY: all trace frame roms clean
+.PHONY: all trace frame iotest roms clean
 
 all: $(OBJ)/Vsim_top
 
@@ -62,6 +65,16 @@ frame: $(OBJ)/Vsim_top $(OBJ)/boot.rom $(OBJ)/mame_frame_$(FRAME).png
 $(OBJ)/mame_frame_%.png: $(ROMSET)
 	mkdir -p $(OBJ)
 	sh mame_snap.sh $(dir $(abspath $(ROMSET))) $@ $*
+
+$(OBJ)/iotest.rom: tests/iotest.asm
+	mkdir -p $(OBJ)
+	z80asm -o $@ $<
+
+iotest: $(OBJ)/Vsim_top $(OBJ)/boot.rom $(OBJ)/iotest.rom
+	$(OBJ)/Vsim_top $(OBJ)/iotest.rom $(OBJ)/boot1.rom --frames 20 --loopback 1 --results $(OBJ)/iotest_sim.txt
+	sh tests/mame_results.sh $(OBJ)/iotest.rom $(OBJ)/boot1.rom $(OBJ)/iotest_mame.txt 1
+	diff $(OBJ)/iotest_mame.txt $(OBJ)/iotest_sim.txt
+	@echo "iotest: $$(wc -l < $(OBJ)/iotest_sim.txt) results, all match MAME"
 
 clean:
 	rm -rf $(OBJ)

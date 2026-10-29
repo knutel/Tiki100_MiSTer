@@ -77,7 +77,7 @@ Ports are decoded from address bits A7–A2 of the low byte (groups of four). Un
 | 18–1B | TIMS | CTC channels 0–3 | CTC channels 0–3 |
 | 1C–1F | SYL | – | System latch |
 
-MAME uses `cd_ba` addressing for the DART and its generic `read`/`write` for the PIO. Check MAME's `z80sio.cpp` and `z80pio.cpp` for which address bit selects channel/port and which selects control/data. (verify)
+For both the DART (MAME's `cd_ba` addressing) and the PIO (MAME's generic `read`/`write`), A0 selects the channel/port (0 = A, 1 = B) and A1 selects control (1) or data (0). So 04 = DART A data, 06 = DART A control, 08 = PIO A data, 0A = PIO A control. In MAME the DART's CTS, DCD and RI inputs are unconnected and read as active, and the default Centronics printer reports ACK and NO PAPER high on PIO port B; the core copies both.
 
 ### Registers
 
