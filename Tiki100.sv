@@ -57,6 +57,7 @@ localparam CONF_STR = {
 	"-;",
 	"O[122:121],Aspect ratio,Original,Full Screen,[ARC1],[ARC2];",
 	"O[2:1],Boot ROM,2.03w,1.35,1.30;",
+	"O[3],Printer port sync,Off,On;",
 	"-;",
 	"T[0],Reset;",
 	"R[0],Reset and close OSD;",
@@ -199,6 +200,14 @@ tiki100 tiki100
 	.ser_rts_n(),
 	.ser_dtr_n(),
 	.par_data(),
+	// Printer port sync: Darklite's demo "Tiki Tiki Ta" needs a hardware
+	// mod, a cable from the internal video expansion port to the printer
+	// port with VSYNC on data line D0 and HSYNC on D1. The demo puts PIO
+	// port A in bit mode with bits 0-1 as inputs, waits for D0 to rise once
+	// per frame and takes an interrupt when D1 falls on every line. Both are
+	// active high: its disk loader treats D0 = 1 as "in VSYNC" and plays the
+	// music then. With the option off the lines read FF.
+	.par_data_in(status[3] ? {6'b111111, HSync, VSync} : 8'hFF),
 	.par_strobe(),
 	.par_ack(1'b1),
 	.par_busy(1'b0),

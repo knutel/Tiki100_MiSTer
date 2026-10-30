@@ -99,6 +99,27 @@ image rather than on the magnetic signal, so it doesn't reproduce exact disk
 timing. Each drive has its own copy, so unlike the real FD1797 the two drives
 don't share one track register.
 
+## Printer port sync
+
+Darklite's demo "Tiki Tiki Ta" needs a hardware mod: a cable from the
+internal video expansion port to the printer port, with VSYNC on data line
+D0 and HSYNC on D1 (both active high). The demo puts the PIO's port A in bit
+mode with those two bits as inputs. It waits for D0 to rise once per frame,
+and changes the palette from an interrupt that D1 raises on every line
+(the raster bars). Without the cable it hangs on the boot ROM's screen, in
+MAME too.
+
+The OSD's **Printer port sync** option adds the cable. Leave it Off for
+everything else: with it On, the printer's D0 and D1 inputs follow the
+sync signals instead of reading 1. In the simulator, `--printer-sync 1` does
+the same:
+
+    sim/obj/Vsim_top sim/obj/boot.rom sim/obj/boot1.rom --printer-sync 1 \
+        --disk0 darklite_-_tiki_tiki_ta.dsk --frames 1501 --dump 700 --dump 1500
+
+We don't know where the real Tiki 100's VSYNC sits relative to the visible
+lines, so raster effects that count lines from VSYNC may be a few lines off.
+
 ## Sound
 
 The AY-3-8912 is `rtl/ym2149.sv` from the ZX Spectrum core, at 2 MHz with the

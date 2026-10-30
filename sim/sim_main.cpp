@@ -15,6 +15,8 @@
 //   --results FILE      write every byte the CPU writes to port FF (the
 //                       test ROMs' result port) to FILE, one hex byte per line
 //   --loopback 1        connect each DART channel's TxD to its RxD
+//   --printer-sync 1    put VSYNC and HSYNC on printer data lines D0 and D1
+//                       (the OSD's Printer port sync option)
 //   --wav FILE          record the sound output (mono, 16 bits, 50 kHz)
 //   --disk0 FILE        mount a disk image in drive A (--disk1: drive B).
 //                       Writes change only the copy in memory.
@@ -84,6 +86,7 @@ int main(int argc, char **argv)
 
 	FILE *trace = nullptr, *results = nullptr;
 	bool loopback = false;
+	bool printer_sync = false;
 	std::vector<unsigned char> disk[2];
 	std::vector<unsigned char> boot[3];
 	boot[0] = rom;
@@ -112,6 +115,7 @@ int main(int argc, char **argv)
 		else if (a == "--outdir")       outdir = v;
 		else if (a == "--results")      { results = fopen(v, "w"); if (!results) { perror(v); return 1; } }
 		else if (a == "--loopback")     loopback = atoi(v) != 0;
+		else if (a == "--printer-sync") printer_sync = atoi(v) != 0;
 		else if (a == "--disk0")        disk[0] = load(v);
 		else if (a == "--wav")          { wav = fopen(v, "wb"); if (!wav) { perror(v); return 1; } fseek(wav, 44, SEEK_SET); }
 		else if (a == "--disk1")        disk[1] = load(v);
@@ -141,6 +145,7 @@ int main(int argc, char **argv)
 	Verilated::commandArgs(argc, argv);
 	Vsim_top *top = new Vsim_top;
 	top->loopback = loopback;
+	top->printer_sync = printer_sync;
 
 	auto tick = [&]() {
 		top->clk = 0; top->eval();

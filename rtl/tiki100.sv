@@ -67,6 +67,7 @@ module tiki100
 
 	// Centronics printer and cassette (PIO)
 	output  [7:0] par_data,
+	input   [7:0] par_data_in,  // levels on the data lines, read when PIO port A bits are inputs
 	output        par_strobe,
 	input         par_ack,
 	input         par_busy,
@@ -83,7 +84,7 @@ module tiki100
 	output  [7:0] vga_g,
 	output  [7:0] vga_b,
 	output        hsync,
-	output        vsync,        // also the hook for demos that read VSYNC on a PIO pin (MAME TODO)
+	output        vsync,
 	output        hblank,
 	output        vblank
 );
@@ -538,8 +539,9 @@ z80dart dart
 // Port A is the Centronics data bus. Port B: bit 0 strobe (out), 4 ACK,
 // 5 BUSY, 6 tape out / NO PAPER in, 7 tape in. The strobe inputs are not
 // connected; like MAME they stay low, so input reads see the pins directly.
-// (MAME TODO: some demos expect VSYNC on a PIO pin. vsync is available here
-// if a schematic shows where it goes.)
+// Port A's input levels come from par_data_in, so the glue outside the core
+// can model a cable on the printer port (see the printer port sync option
+// in Tiki100.sv).
 
 wire [7:0] pio_dout;
 wire [7:0] pa_out, pb_out;
@@ -559,7 +561,7 @@ z80pio pio
 	.intack(intack_p & ~ctc_int & ~dart_int & pio_int),
 	.vector(pio_vector),
 	.reti(reti),
-	.pa_in(8'hFF),        // Centronics data lines read back nothing
+	.pa_in(par_data_in),
 	.pa_out(pa_out),
 	.pa_oe(),
 	.astb_n(1'b0),

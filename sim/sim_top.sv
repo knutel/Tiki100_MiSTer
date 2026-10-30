@@ -12,6 +12,7 @@ module sim_top
 	input  [12:0] dl_addr,
 	input   [7:0] dl_data,
 	input         loopback,     // connect each DART channel's TxD to its RxD
+	input         printer_sync, // VSYNC and HSYNC on printer data lines D0 and D1 (OSD option)
 	input  [10:0] ps2_key,
 
 	// Disk images (hps_io's SD interface, flattened for the C++ testbench)
@@ -88,6 +89,7 @@ tiki100 core
 	.ser_rts_n(),
 	.ser_dtr_n(),
 	.par_data(),
+	.par_data_in(printer_sync ? {6'b111111, hsync, vsync} : 8'hFF),
 	.par_strobe(),
 	.par_ack(1'b1),
 	.par_busy(1'b0),
