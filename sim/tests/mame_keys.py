@@ -120,10 +120,15 @@ sub = emu.add_machine_frame_notifier(function()
   end
 end)
 """)
+        # MAME writes changes back to the image, so give it a copy
+        disk = None
+        if args.disk:
+            disk = os.path.join(tmp, os.path.basename(args.disk))
+            shutil.copyfile(args.disk, disk)
         env = dict(os.environ, SDL_VIDEODRIVER="dummy", SDL_AUDIODRIVER="dummy")
         subprocess.run(["mame", "tiki100", "-rompath", rompath,
                         "-slot1", "", "-slot2", "",
-                        *(["-flop1", os.path.abspath(args.disk)] if args.disk else []),
+                        *(["-flop1", disk] if disk else []),
                         "-autoboot_script", lua, "-autoboot_delay", "0",
                         "-video", "none", "-sound", "none", "-nothrottle",
                         "-skip_gameinfo", "-snapshot_directory", tmp],

@@ -16,7 +16,11 @@
 //                       test ROMs' result port) to FILE, one hex byte per line
 //   --loopback 1        connect each DART channel's TxD to its RxD
 //   --wav FILE          record the sound output (mono, 16 bits, 50 kHz)
-//   --disk0 FILE        mount a disk image in drive A (--disk1: drive B)
+//   --disk0 FILE        mount a disk image in drive A (--disk1: drive B).
+//                       Writes change only the copy in memory.
+//   --save0 FILE        at the end, save drive A's image with the writes
+//                       (--save1: drive B)
+//   --readonly0 1       mount drive A's image read-only (--readonly1: B)
 //   --keys FILE         PS/2 key events, one per line: "frame scancode 1|0"
 //                       (1 = press, 0 = release). The scancode is set 2 hex,
 //                       with E0 in front for extended keys, e.g. "300 32 1"
@@ -75,6 +79,8 @@ int main(int argc, char **argv)
 	FILE *trace = nullptr, *results = nullptr;
 	bool loopback = false;
 	std::vector<unsigned char> disk[2];
+	std::string save[2];
+	unsigned readonly = 0;
 	FILE *wav = nullptr;
 	unsigned long wav_samples = 0;
 	struct KeyEvent { long frame; unsigned ps2; };
@@ -98,6 +104,10 @@ int main(int argc, char **argv)
 		else if (a == "--disk0")        disk[0] = load(v);
 		else if (a == "--wav")          { wav = fopen(v, "wb"); if (!wav) { perror(v); return 1; } fseek(wav, 44, SEEK_SET); }
 		else if (a == "--disk1")        disk[1] = load(v);
+		else if (a == "--save0")        save[0] = v;
+		else if (a == "--save1")        save[1] = v;
+		else if (a == "--readonly0")    readonly = (readonly & ~1u) | (atoi(v) ? 1 : 0);
+		else if (a == "--readonly1")    readonly = (readonly & ~2u) | (atoi(v) ? 2 : 0);
 		else if (a == "--keys") {
 			FILE *f = fopen(v, "r");
 			if (!f) { perror(v); return 1; }
@@ -139,10 +149,12 @@ int main(int argc, char **argv)
 	// Disk images: mount them like hps_io does (img_mounted pulses with
 	// img_size valid), then serve 512-byte sector reads on sd_rd: raise
 	// sd_ack, write the block into the core's buffer through
-	// sd_buff_addr/dout/wr, drop sd_ack.
+	// sd_buff_addr/dout/wr, drop sd_ack. Writes on sd_wr work the same way,
+	// but read the block from the core's buffer on sd_buff_din.
 	for (int d = 0; d < 2; d++) {
 		if (disk[d].empty()) continue;
 		top->img_size = disk[d].size();
+		top->img_readonly = readonly;
 		top->img_mounted = 1 << d;
 		for (int i = 0; i < 10; i++) tick();
 		top->img_mounted = 0;
@@ -151,17 +163,16 @@ int main(int argc, char **argv)
 	int sd_drive = -1;      // drive being served
 	long sd_pos = -1;       // clocks since the request (-1: idle)
 	unsigned sd_lba = 0;
+	bool sd_write = false;
 	auto sd_step = [&]() {
 		if (sd_pos < 0) {
 			for (int d = 0; d < 2; d++) {
-				if (top->sd_rd & (1 << d)) {
+				if (top->sd_rd & (1 << d) || top->sd_wr & (1 << d)) {
 					sd_drive = d;
 					sd_lba = d ? top->sd_lba1 : top->sd_lba0;
+					sd_write = !(top->sd_rd & (1 << d));
 					sd_pos = 0;
 					break;
-				}
-				if (top->sd_wr & (1 << d)) {
-					fprintf(stderr, "disk %d: write to block %u ignored\n", d, d ? top->sd_lba1 : top->sd_lba0);
 				}
 			}
 			return;
@@ -169,11 +180,19 @@ int main(int argc, char **argv)
 		sd_pos++;
 		long t = sd_pos - 200;          // some latency, like the ARM side
 		top->sd_buff_wr = 0;
+		std::vector<unsigned char> &img = disk[sd_drive];
 		if (t == 0) top->sd_ack = 1 << sd_drive;
+		else if (t > 0 && t <= 1024 && sd_write) {
+			// Set the address on odd clocks, take the byte on even ones
+			// (the core's buffer is a synchronous RAM)
+			unsigned i = (t - 1) / 2;
+			size_t off = (size_t)sd_lba * 512 + i;
+			if (t & 1) top->sd_buff_addr = i;
+			else if (off < img.size()) img[off] = sd_drive ? top->sd_buff_din1 : top->sd_buff_din0;
+		}
 		else if (t > 0 && t <= 1024 && (t & 1)) {
 			unsigned i = (t - 1) / 2;
 			size_t off = (size_t)sd_lba * 512 + i;
-			const std::vector<unsigned char> &img = disk[sd_drive];
 			top->sd_buff_addr = i;
 			top->sd_buff_dout = off < img.size() ? img[off] : 0;
 			top->sd_buff_wr = 1;
@@ -320,6 +339,13 @@ int main(int argc, char **argv)
 	        count, frames, cycles, cycles / 40e6);
 	if (trace) fclose(trace);
 	if (results) fclose(results);
+	for (int d = 0; d < 2; d++) {
+		if (save[d].empty()) continue;
+		FILE *f = fopen(save[d].c_str(), "wb");
+		if (!f) { perror(save[d].c_str()); return 1; }
+		fwrite(disk[d].data(), 1, disk[d].size(), f);
+		fclose(f);
+	}
 	if (wav) {
 		// RIFF header for 16-bit mono PCM at 50 kHz
 		auto u32 = [&](uint32_t x) { fwrite(&x, 4, 1, wav); };

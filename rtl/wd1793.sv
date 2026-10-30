@@ -12,6 +12,9 @@
 //    number outside the track (it doesn't use the sector register), and it
 //    copies the track number it read into the sector register at the end,
 //    like a real WD/FD179x.
+//  - FORCE INTERRUPT shows the write protect bit in the status register, like
+//    the other type I commands. TIKO checks it after a FORCE INTERRUPT before
+//    writing, and retries forever if the write then fails.
 //  - buff_wr and spt_addr are declared at module level instead of inside
 //    generate blocks, so that Verilator accepts the file.
 //
@@ -732,6 +735,7 @@ always @(posedge clk_sys) begin
 							'hD:	// interrupt
 								begin
 									cmd_mode <= 0;
+									s_wpe    <= 1;   // type I status shows write protect
 									if(state != STATE_IDLE) state <= STATE_ABORT;
 										else {s_wrfault,s_seekerr,s_crcerr,s_lostdata, s_drq_busy} <= 0;
 								end

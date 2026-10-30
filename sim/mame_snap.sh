@@ -10,11 +10,13 @@ set -e
 ROMPATH=$(realpath "$1")
 OUT=$(realpath "$2")
 FRAME=$3
-FLOP=""
-if [ -n "$4" ]; then FLOP="-flop1 $(realpath "$4")"; fi
 
 DIR=$(mktemp -d)
 trap 'rm -rf "$DIR"' EXIT
+
+# MAME writes changes back to the image, so give it a copy
+FLOP=""
+if [ -n "$4" ]; then cp "$4" "$DIR/disk.dsk"; FLOP="-flop1 $DIR/disk.dsk"; fi
 cat > "$DIR/snap.lua" <<EOF
 local frames = 0
 sub = emu.add_machine_frame_notifier(function()

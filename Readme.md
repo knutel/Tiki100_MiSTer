@@ -7,7 +7,7 @@ Work in progress. Implemented so far: Z80 CPU (T80), 64 KB RAM, 32 KB video
 RAM, boot ROM, PROM-based memory banking, system latch, I/O decoding, ROM
 loading, video (all three graphics modes, palette, hardware scroll), and the
 Z80 CTC, DART and PIO with mode 2 (daisy chain) interrupts, the keyboard, and
-the FD1797 floppy controller with two drives (read-only for now), and the
+the FD1797 floppy controller with two drives, and the
 AY-3-8912 sound chip. The serial ports, printer port and cassette aren't
 connected to the MiSTer's I/O yet.
 
@@ -74,11 +74,19 @@ Mount disk images in the OSD as Drive A and Drive B. The core takes the raw
 
 The 90 KB single density images (128-byte sectors) aren't supported.
 
-Disks are read-only for now: the core never writes to the image on the SD
-card. With a disk in drive A, the boot ROM loads it on its own; TIKO shows
-its program menu after about 10 seconds.
+With a disk in drive A, the boot ROM loads it on its own; TIKO shows its
+program menu after about 10 seconds.
 
-The floppy controller is `rtl/wd1793.sv` from the ZX Spectrum core, with two
+Writes go straight to the image file on the SD card, as on a real disk, so
+keep a copy of images you want to keep unchanged. TIKO writes even when you
+only run programs from a batch file: UTFØR (TIKO's SUBMIT) saves the
+commands it is about to run in a `$$$.SUB` file. Disks that start a game
+this way, like `invaders.dsk`, hang after printing "utfør 1.1" if they can't
+write. An image the MiSTer can't write (a read-only file) shows as write
+protected, and TIKO stops with "Feil på A: Lese/skrive feil" (read/write
+error on A), as in MAME.
+
+The floppy controller is `rtl/wd1793.sv` from the ZX Spectrum core, with a few
 small fixes listed at the top of the file. It works on whole sectors of the
 image rather than on the magnetic signal, so it doesn't reproduce exact disk
 timing. Each drive has its own copy, so unlike the real FD1797 the two drives
@@ -163,7 +171,9 @@ repository root, from MAME's software list) and compares frame 600 with
 MAME booting the same disk (up to 16 pixels may differ, for the blinking
 cursor). Options: `DISK=path/to/image.dsk`,
 `TIKO_FRAME=n`. The simulator's `--disk0 FILE` and `--disk1 FILE` options
-mount images; `TRACE_FDC=file` logs every floppy controller access.
+mount images (writes change only the simulator's copy; `--save0 FILE` saves
+it at the end, `--readonly0 1` mounts it write protected);
+`TRACE_FDC=file` logs every floppy controller access.
 
     make tikodir
 
@@ -180,6 +190,13 @@ in its expansion slots. `sim/mame_trace.sh` empties the slots so MAME matches
 the core.
 
 ## Status
+
+Disk writes: the core now writes disk images back to the SD card.
+`invaders.dsk` (started by TIKO's UTFØR batch command, which writes a
+`$$$.SUB` file) reaches the game's title screen, and frame 1500 matches
+MAME's pixel for pixel. The sectors it writes match MAME's (apart from 15
+bytes of never-written RAM, 00 in the core and FF in MAME). With the image
+write protected, TIKO stops with the same read/write error as MAME.
 
 Milestone 6 (sound): `make sound` matches MAME: identical register
 read-back, and the same pitch, noise rate, envelope rate and timing. In

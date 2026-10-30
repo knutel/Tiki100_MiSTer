@@ -14,6 +14,7 @@ module sim_top
 
 	// Disk images (hps_io's SD interface, flattened for the C++ testbench)
 	input   [1:0] img_mounted,
+	input   [1:0] img_readonly,
 	input  [63:0] img_size,
 	output [31:0] sd_lba0,
 	output [31:0] sd_lba1,
@@ -23,6 +24,8 @@ module sim_top
 	input   [8:0] sd_buff_addr,
 	input   [7:0] sd_buff_dout,
 	input         sd_buff_wr,
+	output  [7:0] sd_buff_din0,
+	output  [7:0] sd_buff_din1,
 
 	output        m1_n,
 	output        mreq_n,
@@ -49,6 +52,9 @@ wire [1:0] ser_txd;
 wire [31:0] sd_lba[2];
 assign sd_lba0 = sd_lba[0];
 assign sd_lba1 = sd_lba[1];
+wire  [7:0] sd_buff_din[2];
+assign sd_buff_din0 = sd_buff_din[0];
+assign sd_buff_din1 = sd_buff_din[1];
 
 tiki100 core
 (
@@ -60,6 +66,7 @@ tiki100 core
 	.dl_data(dl_data),
 	.ps2_key(ps2_key),
 	.img_mounted(img_mounted),
+	.img_readonly(img_readonly),
 	.img_size(img_size),
 	.sd_lba(sd_lba),
 	.sd_rd(sd_rd),
@@ -67,7 +74,7 @@ tiki100 core
 	.sd_ack(sd_ack),
 	.sd_buff_addr(sd_buff_addr),
 	.sd_buff_dout(sd_buff_dout),
-	.sd_buff_din(),
+	.sd_buff_din(sd_buff_din),
 	.sd_buff_wr(sd_buff_wr),
 	.sys_latch(sys_latch),
 	.ser_rxd(loopback ? ser_txd : 2'b11),

@@ -37,8 +37,10 @@ module tiki100
 	// Floppy disk images through hps_io's SD interface (VDNUM=2), drive 0 in
 	// bit 0 / element 0. Images are raw sector dumps as in MAME's tiki100
 	// software list: 512-byte sectors, 10 (or 9) per track, track by track
-	// and side by side.
+	// and side by side. Writes go back to the image on the SD card unless
+	// it is read-only.
 	input   [1:0] img_mounted,
+	input   [1:0] img_readonly,
 	input  [63:0] img_size,
 	output [31:0] sd_lba[2],
 	output  [1:0] sd_rd,
@@ -549,6 +551,12 @@ assign tape_out   = pb_out[6];
 // the read/write commands selects the disk side (the SSO output). wd1793.sv
 // takes the side as an input, so it is latched here.
 //
+// Write sector commands write the image on the SD card. TIKO needs this even
+// to run programs from a batch file: UTFOR.COM (TIKO's SUBMIT) saves the
+// commands it is about to run in a $$$.SUB file. A read-only image (the file can't be written) shows as
+// write protected, and the write fails with the status register's write
+// protect bit set, as with a write-protect tab on a real disk.
+//
 // DRQ and INTRQ are not connected on the Tiki 100; software polls the status
 // register. Like MAME, a drive is ready when it is selected, has a disk and
 // the motor (system latch bit 6) has been on for one revolution, 200 ms at
@@ -589,11 +597,13 @@ end
 // 200 KB) are laid out track by track.
 reg  [19:0] dsk_size[2];
 reg   [1:0] mounted;
+reg   [1:0] readonly;
 always @(posedge clk) begin
 	for (int i = 0; i < 2; i++) begin
 		if (img_mounted[i]) begin
 			dsk_size[i] <= img_size[19:0];
 			mounted[i]  <= img_size != 64'd0;
+			readonly[i] <= img_readonly[i];
 		end
 	end
 end
@@ -618,7 +628,7 @@ generate
 			.intrq(),
 			.busy(),
 
-			.wp(1'b1),           // read-only for now: writing back to the SD card is milestone 7
+			.wp(readonly[d]),
 			.size_code(dsk_size[d] == 20'd368640 ? 3'd2 : 3'd4),
 			.layout(dsk_size[d] <= 20'd204800),
 			.side(side),

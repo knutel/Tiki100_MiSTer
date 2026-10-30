@@ -71,6 +71,7 @@ wire [127:0] status;
 wire  [10:0] ps2_key;
 
 wire   [1:0] img_mounted;
+wire   [1:0] img_readonly;
 wire  [63:0] img_size;
 wire  [31:0] sd_lba[2];
 wire   [1:0] sd_rd, sd_wr, sd_ack;
@@ -109,7 +110,7 @@ hps_io #(.CONF_STR(CONF_STR), .VDNUM(2)) hps_io
 	.ps2_key(ps2_key),
 
 	.img_mounted(img_mounted),
-	.img_readonly(),
+	.img_readonly(img_readonly),
 	.img_size(img_size),
 	.sd_lba(sd_lba),
 	.sd_blk_cnt(sd_blk_cnt),
@@ -164,6 +165,7 @@ tiki100 tiki100
 	.ps2_key(ps2_key),
 
 	.img_mounted(img_mounted),
+	.img_readonly(img_readonly),
 	.img_size(img_size),
 	.sd_lba(sd_lba),
 	.sd_rd(sd_rd),
