@@ -5,6 +5,8 @@
 #   make frame      compare a video frame (FRAME, default 100) with a MAME snapshot
 #   make iotest     run the CTC/DART/PIO test ROM in the simulator and in MAME
 #                   and compare the results
+#   make sound      run the AY-3-8912 test ROM in the simulator and in MAME:
+#                   compare register read-back and the recorded sound
 #   make tiko       boot TIKO from a disk image (DISK, default the 400K TIKO
 #                   2.08r image) and compare frame TIKO_FRAME with MAME (up to
 #                   16 pixels may differ: the cursor blinks in its own phase).
@@ -31,10 +33,10 @@ T80_SRC = $(T80)/T80_Pack.vhd $(T80)/T80_ALU.vhd $(T80)/T80_MCode.vhd \
           $(T80)/T80_Reg.vhd $(T80)/T80.vhd $(T80)/T80pa.vhd
 GHDL_FLAGS = --std=93c -fexplicit -fsynopsys --workdir=$(OBJ)
 
-RTL = sim_top.sv ../rtl/tiki100.sv ../rtl/tiki100_video.sv ../rtl/tiki100_keyboard.sv ../rtl/wd1793.sv ../rtl/z80ctc.sv \
+RTL = sim_top.sv ../rtl/tiki100.sv ../rtl/tiki100_video.sv ../rtl/tiki100_keyboard.sv ../rtl/wd1793.sv $(OBJ)/ym2149.sv ../rtl/z80ctc.sv \
       ../rtl/z80dart.sv ../rtl/z80pio.sv
 
-.PHONY: all trace frame iotest kbdtest tiko tikodir roms clean
+.PHONY: all trace frame iotest kbdtest sound tiko tikodir roms clean
 
 all: $(OBJ)/Vsim_top
 
@@ -46,6 +48,13 @@ $(OBJ)/T80pa.v: $(T80_SRC)
 	ghdl --synth $(GHDL_FLAGS) --out=verilog T80pa > $@.tmp 2> $(OBJ)/ghdl.log || (cat $(OBJ)/ghdl.log; exit 1)
 	python3 -I fix_ghdl_verilog.py $@.tmp $@
 	rm $@.tmp
+
+# ym2149.sv initialises an unpacked wire array in its declaration (the
+# volume table). Quartus accepts that; Verilator 5.0 doesn't, so simulate a
+# copy where the table is a localparam.
+$(OBJ)/ym2149.sv: ../rtl/ym2149.sv Makefile
+	mkdir -p $(OBJ)
+	sed 's/^wire \[7:0\] volTable\[64\] = /localparam bit [7:0] volTable[64] = /' $< > $@
 
 $(OBJ)/Vsim_top: $(RTL) $(OBJ)/T80pa.v sim_main.cpp
 	verilator --cc --exe --build -j 0 -O3 --top-module sim_top \
@@ -96,6 +105,17 @@ kbdtest: $(OBJ)/Vsim_top $(OBJ)/boot.rom $(OBJ)/kbdtest.rom
 	python3 -I tests/mame_keys.py .. tests/keys_kbdtest.txt 80 --results $(OBJ)/kbdtest_mame.txt --rom $(OBJ)/kbdtest.rom --prom $(OBJ)/boot1.rom
 	diff $(OBJ)/kbdtest_mame.txt $(OBJ)/kbdtest_sim.txt
 	@echo "kbdtest: $$(grep -c A5 $(OBJ)/kbdtest_sim.txt) key matrix states, all match MAME"
+
+$(OBJ)/sound.rom: tests/sound.asm
+	mkdir -p $(OBJ)
+	z80asm -o $@ $<
+
+sound: $(OBJ)/Vsim_top $(OBJ)/boot.rom $(OBJ)/sound.rom
+	$(OBJ)/Vsim_top $(OBJ)/sound.rom $(OBJ)/boot1.rom --frames 100 --results $(OBJ)/sound_sim.txt --wav $(OBJ)/sound_sim.wav
+	sh tests/mame_results.sh $(OBJ)/sound.rom $(OBJ)/boot1.rom $(OBJ)/sound_mame.txt 2 $(abspath $(OBJ)/sound_mame.wav)
+	diff $(OBJ)/sound_mame.txt $(OBJ)/sound_sim.txt
+	@echo "sound: register read-back matches MAME"
+	python3 -I tests/compare_sound.py $(OBJ)/sound_mame.wav $(OBJ)/sound_sim.wav
 
 # Disk images come from MAME's tiki100 software list (not committed to git)
 $(OBJ)/%.dsk: ../%.zip

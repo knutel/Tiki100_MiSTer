@@ -34,6 +34,7 @@ module sim_top
 	output        wr_n,
 	output  [7:0] sys_latch,
 
+	output  [9:0] audio,
 	output        ce_pix,
 	output  [7:0] vga_r,
 	output  [7:0] vga_g,
@@ -82,6 +83,7 @@ tiki100 core
 	.par_perror(1'b1),
 	.tape_out(),
 	.tape_in(1'b0),
+	.audio(audio),
 	.ce_pix(ce_pix),
 	.vga_r(vga_r),
 	.vga_g(vga_g),

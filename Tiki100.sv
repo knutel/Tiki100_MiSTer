@@ -38,10 +38,6 @@ assign HDMI_FREEZE = 0;
 assign HDMI_BLACKOUT = 0;
 assign HDMI_BOB_DEINT = 0;
 
-assign AUDIO_S = 0;
-assign AUDIO_L = 0;
-assign AUDIO_R = 0;
-assign AUDIO_MIX = 0;
 
 assign BUTTONS = 0;
 
@@ -146,6 +142,13 @@ wire rom_wr  = ioctl_download && ioctl_wr && ioctl_index[7:6] == 2'd0 && ioctl_a
 wire prom_wr = ioctl_download && ioctl_wr && ioctl_index[7:6] == 2'd1 && ioctl_addr < 27'h100;
 
 wire [7:0] sys_latch;
+wire [9:0] audio;
+
+// The AY-3-8912 is mono: the same unsigned signal on both channels
+assign AUDIO_S   = 0;
+assign AUDIO_L   = {audio, 6'd0};
+assign AUDIO_R   = {audio, 6'd0};
+assign AUDIO_MIX = 0;
 wire       ce_pix, HSync, VSync, HBlank, VBlank;
 
 tiki100 tiki100
@@ -189,6 +192,8 @@ tiki100 tiki100
 	.par_perror(1'b1),
 	.tape_out(),
 	.tape_in(1'b0),
+
+	.audio(audio),
 
 	.ce_pix(ce_pix),
 	.vga_r(VGA_R),

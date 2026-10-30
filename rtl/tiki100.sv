@@ -69,6 +69,9 @@ module tiki100
 	output        tape_out,
 	input         tape_in,
 
+	// Sound: the AY-3-8912's three channels mixed, unsigned
+	output  [9:0] audio,
+
 	// Video, 20 MHz dot clock enable on clk
 	output        ce_pix,
 	output  [7:0] vga_r,
@@ -155,7 +158,7 @@ assign sys_latch = syl;
 wire rome = syl[2];   // _ROME: 0 maps the ROM in
 wire vire = syl[3];
 
-reg [7:0] scroll_r;   // AY port A, see the AY stub below
+reg [7:0] scroll_r;   // AY port A, see the AY-3-8912 section below
 
 ////////////////////////////////////////////////////////////////////////////////
 // Memory banking
@@ -285,45 +288,70 @@ tiki100_keyboard keyboard
 );
 
 ////////////////////////////////////////////////////////////////////////////////
-// AY-3-8912 register stub
+// AY-3-8912 sound chip (ports 16-17), ym2149.sv from the ZX Spectrum core
 //
-// Only enough of the sound chip to drive the scroll register, which hangs off
-// AY I/O port A. Milestone 6 replaces this with ym2149.sv. Like MAME, the
-// port A value reaches the scroll register only when port A is set to output
-// (register 7, bit 6).
+// Port 16 writes the register address, port 17 writes or reads the register.
+// It runs at 2 MHz like the real chip (SEL = 0: no extra divide by 2) and
+// uses the AY-3-8910 volume curve (MODE = 1). The 8912 is an 8910 with only
+// I/O port A brought out.
+//
+// Port A drives the video scroll register. Its pins are outputs only while
+// register 7 bit 6 is set; otherwise they float high and the scroll register
+// sees FF, as in MAME (which writes FF to it when port A becomes an input,
+// including at reset). The core keeps its own copy of the address latch and
+// of that bit to know when the pins are driven.
+//
+// Unused register bits read as 0, as on a real AY-3-8910. (MAME returns all
+// 8 bits for the 8912 because its masks are only confirmed for the 8910.)
 
-reg [3:0] ay_addr;
-reg [7:0] ay_reg[16];
+wire       ay_sel   = io_hit && io_grp == IO_VIPS;
+wire       ay_bdir  = io_wr && ay_sel && cpu_a[1];                    // write address (16) or data (17)
+wire       ay_bc    = ay_sel && ((io_wr && cpu_a[1:0] == 2'd2) ||      // address
+                                 (io_rd && cpu_a[1:0] == 2'd3));      // read data
+wire [7:0] ay_dout, ay_porta, ay_a, ay_b, ay_c;
+
+reg  [7:0] ay_addr;
+reg        ay_porta_out;      // register 7 bit 6: port A is an output
 
 always @(posedge clk) begin
 	if (reset) begin
-		ay_addr  <= 4'd0;
-		scroll_r <= 8'h00;
-		for (int i = 0; i < 16; i++) ay_reg[i] <= 8'h00;
+		ay_addr      <= 8'd0;
+		ay_porta_out <= 1'b0;
 	end
-	else if (io_wr && io_vips) begin
-		if (cpu_a[1:0] == 2'd2 && cpu_do[7:4] == 4'd0) ay_addr <= cpu_do[3:0];
-		if (cpu_a[1:0] == 2'd3) begin
-			ay_reg[ay_addr] <= cpu_do;
-			if (ay_addr == 4'd14 && ay_reg[7][6])    scroll_r <= cpu_do;
-			if (ay_addr == 4'd7  && cpu_do[6])       scroll_r <= ay_reg[14];
-		end
+	else if (ay_bdir) begin
+		if (ay_bc) ay_addr <= cpu_do;
+		else if (ay_addr == 8'd7) ay_porta_out <= cpu_do[6];
 	end
 end
 
-// Unused register bits read as 0 on the AY-3-8910 family.
-reg [7:0] ay_mask;
-always @(*) begin
-	case (ay_addr)
-		4'd1, 4'd3, 4'd5, 4'd13: ay_mask = 8'h0F;
-		4'd6, 4'd8, 4'd9, 4'd10: ay_mask = 8'h1F;
-		default:                 ay_mask = 8'hFF;
-	endcase
-end
+always @(*) scroll_r = ay_porta_out ? ay_porta : 8'hFF;
 
-wire [7:0] ay_dout = (ay_addr == 4'd14 && !ay_reg[7][6]) ? 8'hFF :   // port A as input: pulled high
-                     (ay_addr == 4'd15)                  ? 8'hFF :   // the 8912 has no port B
-                                                           ay_reg[ay_addr] & ay_mask;
+YM2149 psg
+(
+	.CLK(clk),
+	.CE(ce_2m),
+	.RESET(reset),
+	.BDIR(ay_bdir),
+	.BC(ay_bc),
+	.DI(cpu_do),
+	.DO(ay_dout),
+	.CHANNEL_A(ay_a),
+	.CHANNEL_B(ay_b),
+	.CHANNEL_C(ay_c),
+	.LEVEL_A(),
+	.LEVEL_B(),
+	.LEVEL_C(),
+	.SEL(1'b0),
+	.MODE(1'b1),
+	.ACTIVE(),
+	.IOA_in(scroll_r),        // the pins: driven by port A, or pulled high
+	.IOA_out(ay_porta),
+	.IOB_in(8'hFF),           // no port B pins on the 8912
+	.IOB_out()
+);
+
+// Mono: the three channels mixed
+assign audio = {2'b00, ay_a} + {2'b00, ay_b} + {2'b00, ay_c};
 
 ////////////////////////////////////////////////////////////////////////////////
 // Interrupts

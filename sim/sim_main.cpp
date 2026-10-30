@@ -15,6 +15,7 @@
 //   --results FILE      write every byte the CPU writes to port FF (the
 //                       test ROMs' result port) to FILE, one hex byte per line
 //   --loopback 1        connect each DART channel's TxD to its RxD
+//   --wav FILE          record the sound output (mono, 16 bits, 50 kHz)
 //   --disk0 FILE        mount a disk image in drive A (--disk1: drive B)
 //   --keys FILE         PS/2 key events, one per line: "frame scancode 1|0"
 //                       (1 = press, 0 = release). The scancode is set 2 hex,
@@ -74,6 +75,8 @@ int main(int argc, char **argv)
 	FILE *trace = nullptr, *results = nullptr;
 	bool loopback = false;
 	std::vector<unsigned char> disk[2];
+	FILE *wav = nullptr;
+	unsigned long wav_samples = 0;
 	struct KeyEvent { long frame; unsigned ps2; };
 	std::deque<KeyEvent> keys;      // in file order
 	std::deque<unsigned> key_queue; // due, waiting to be sent
@@ -93,6 +96,7 @@ int main(int argc, char **argv)
 		else if (a == "--results")      { results = fopen(v, "w"); if (!results) { perror(v); return 1; } }
 		else if (a == "--loopback")     loopback = atoi(v) != 0;
 		else if (a == "--disk0")        disk[0] = load(v);
+		else if (a == "--wav")          { wav = fopen(v, "wb"); if (!wav) { perror(v); return 1; } fseek(wav, 44, SEEK_SET); }
 		else if (a == "--disk1")        disk[1] = load(v);
 		else if (a == "--keys") {
 			FILE *f = fopen(v, "r");
@@ -207,6 +211,14 @@ int main(int argc, char **argv)
 		cycles++;
 		sd_step();
 
+		// Sound: one sample every 800 clocks (50 kHz), the 10-bit unsigned
+		// mix scaled to signed 16 bits
+		if (wav && cycles % 800 == 0) {
+			int16_t v = (int16_t)(top->audio * 64 - 32768);
+			fwrite(&v, 2, 1, wav);
+			wav_samples++;
+		}
+
 		if (getenv("TRACE_BUS") && cycles < 60)
 			fprintf(stderr, "clk %3llu  A=%04X m1=%d mreq=%d rd=%d di=%02X\n", cycles,
 			        top->addr, top->m1_n, top->mreq_n, top->rd_n, top->din);
@@ -308,6 +320,16 @@ int main(int argc, char **argv)
 	        count, frames, cycles, cycles / 40e6);
 	if (trace) fclose(trace);
 	if (results) fclose(results);
+	if (wav) {
+		// RIFF header for 16-bit mono PCM at 50 kHz
+		auto u32 = [&](uint32_t x) { fwrite(&x, 4, 1, wav); };
+		auto u16 = [&](uint16_t x) { fwrite(&x, 2, 1, wav); };
+		fseek(wav, 0, SEEK_SET);
+		fwrite("RIFF", 1, 4, wav); u32(36 + wav_samples * 2); fwrite("WAVEfmt ", 1, 8, wav);
+		u32(16); u16(1); u16(1); u32(50000); u32(100000); u16(2); u16(16);
+		fwrite("data", 1, 4, wav); u32(wav_samples * 2);
+		fclose(wav);
+	}
 	top->final();
 	delete top;
 	return 0;

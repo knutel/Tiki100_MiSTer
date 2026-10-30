@@ -2,7 +2,7 @@
 # Run a test ROM in MAME in place of the boot ROM and log what it writes to
 # port FF (the result port), one hex byte per line.
 #
-# Usage: mame_results.sh <test.rom> <boot1.rom> <output.txt> [seconds]
+# Usage: mame_results.sh <test.rom> <boot1.rom> <output.txt> [seconds] [sound.wav]
 #
 # Both serial ports get MAME's RS-232 loopback plug (TxD to RxD). MAME
 # complains about the ROM's checksum, which is expected.
@@ -12,6 +12,8 @@ ROM=$(realpath "$1")
 PROM=$(realpath "$2")
 OUT=$(realpath "$3")
 SECONDS_TO_RUN=${4:-1}
+SOUND="-sound none"
+if [ -n "$5" ]; then SOUND="-sound none -samplerate 48000 -wavwrite $5"; fi
 
 DIR=$(mktemp -d)
 trap 'rm -rf "$DIR"' EXIT
@@ -34,5 +36,5 @@ LUA
 SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy mame tiki100 \
 	-rompath "$DIR" -slot1 "" -slot2 "" -rs232a loopback -rs232b loopback \
 	-autoboot_script "$DIR/results.lua" -autoboot_delay 0 \
-	-video none -sound none -nothrottle -skip_gameinfo \
+	-video none $SOUND -nothrottle -skip_gameinfo \
 	-seconds_to_run "$SECONDS_TO_RUN" 2>&1 | grep -v -e ALSA -e "WRONG CHECKSUMS" -e "EXPECTED:" -e "FOUND:" -e "incorrect length" || true

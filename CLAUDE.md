@@ -164,7 +164,7 @@ FD1797 with two drives. Drive select, motor and density come from the system lat
 From MiSTer-devel/ZX-Spectrum_MISTer, `rtl/`:
 
 - `T80/`: Z80 CPU. Use `T80pa` (separate positive and negative clock enables) or `T80s`.
-- `ym2149.sv`: AY-3-8910-family sound.
+- `ym2149.sv`: AY-3-8910-family sound. Our copy in `rtl/` is unmodified; `sim/Makefile` makes a simulation-only copy because Verilator rejects its volume table declaration.
 - `wd1793.sv`: WD1793-family floppy controller. It has `size_code`, `layout`, `side` and `ready` inputs and an SD-backed mode (`RWMODE=1`) for reading images through `hps_io`'s `sd_*` interface. Our copy in `rtl/` has small fixes (listed in its header); keep them if you update it from upstream.
 
 The Spectrum core has no Z80 CTC, PIO or DART. Look for GPL-compatible implementations in other MiSTer/MiST cores first. If you write your own, implement only the modes the TIKI ROM and TIKO use at first, and test them against MAME's behavior.

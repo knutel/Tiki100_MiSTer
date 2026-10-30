@@ -7,9 +7,9 @@ Work in progress. Implemented so far: Z80 CPU (T80), 64 KB RAM, 32 KB video
 RAM, boot ROM, PROM-based memory banking, system latch, I/O decoding, ROM
 loading, video (all three graphics modes, palette, hardware scroll), and the
 Z80 CTC, DART and PIO with mode 2 (daisy chain) interrupts, the keyboard, and
-the FD1797 floppy controller with two drives (read-only for now). No sound
-yet. The serial ports, printer port and cassette aren't connected to the
-MiSTer's I/O yet.
+the FD1797 floppy controller with two drives (read-only for now), and the
+AY-3-8912 sound chip. The serial ports, printer port and cassette aren't
+connected to the MiSTer's I/O yet.
 
 Video is 1024 x 256 at 50 Hz with 15.6 kHz line rate. HDMI works through the
 MiSTer scaler. Analog VGA users get 15 kHz video: the core doesn't scandouble
@@ -84,6 +84,15 @@ image rather than on the magnetic signal, so it doesn't reproduce exact disk
 timing. Each drive has its own copy, so unlike the real FD1797 the two drives
 don't share one track register.
 
+## Sound
+
+The AY-3-8912 is `rtl/ym2149.sv` from the ZX Spectrum core, at 2 MHz with the
+AY-3-8910 volume curve. It is mono, so both audio channels get the same
+signal. Pitch, noise and envelopes match MAME; relative volume levels differ
+somewhat, because MAME models the chip's output resistors and ym2149.sv uses
+a volume table. Unused register bits read back as 0 like on a real AY-3-8910
+(MAME returns all 8 bits for the 8912).
+
 ## Simulation
 
 Needs `make`, `verilator`, `ghdl`, `python3`, `z80asm` for the test ROM, and
@@ -138,6 +147,15 @@ takes the same file format for any other test.
 `sim/tests/check_keymap.py` checks the scancode table against the key
 definitions in MAME's `tiki100.cpp` source.
 
+    make sound
+
+runs `sim/tests/sound.asm` in the simulator and in MAME. It reads back AY
+registers (the results must be identical) and plays a 440 Hz tone, an 880 Hz
+tone at a lower volume, a tone shaped by the envelope generator, and noise.
+The simulator records its sound with `--wav FILE` and MAME with
+`-wavwrite`; `sim/tests/compare_sound.py` compares the pitch, envelope rate
+and timing of each part, and reports the loudness without judging it.
+
     make tiko
 
 boots TIKO from `tiko208r-400k.dsk` (unpacked from `tiko208r-400k.zip` in the
@@ -162,6 +180,12 @@ in its expansion slots. `sim/mame_trace.sh` empties the slots so MAME matches
 the core.
 
 ## Status
+
+Milestone 6 (sound): `make sound` matches MAME: identical register
+read-back, and the same pitch, noise rate, envelope rate and timing. In
+TIKO's menu, Ctrl+G rings the bell, as in MAME. The scroll register now
+follows the AY's port A pins (FF while port A is an input, as in MAME), and
+the boot trace, video frames and TIKO boot still match.
 
 Milestone 5 (floppy): TIKO 2.08r boots from both the 400 KB and the 200 KB
 image in the simulator. Frame 600 shows TIKO's program menu as in MAME (the
