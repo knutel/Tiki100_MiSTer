@@ -56,6 +56,7 @@ localparam CONF_STR = {
 	"S1,DSK,Drive B:;",
 	"-;",
 	"O[122:121],Aspect ratio,Original,Full Screen,[ARC1],[ARC2];",
+	"O[2:1],Boot ROM,2.03w,1.35,1.30;",
 	"-;",
 	"T[0],Reset;",
 	"R[0],Reset and close OSD;",
@@ -133,14 +134,22 @@ pll pll
 	.outclk_0(clk_sys)
 );
 
-wire reset = RESET | status[0] | buttons[1];
+// Changing the boot ROM in the OSD resets the machine: rom_sel follows the
+// menu only while reset is active, so the reset lasts until it has.
+wire [1:0] rom_sel_osd = (status[2:1] == 2'd3) ? 2'd0 : status[2:1];
+reg  [1:0] rom_sel = 2'd0;
+wire reset = RESET | status[0] | buttons[1] | (rom_sel != rom_sel_osd);
+always @(posedge clk_sys) if (reset) rom_sel <= rom_sel_osd;
 
 ///////////////////////   TIKI 100   /////////////////////////////
 
-// Main_MiSTer loads boot.rom with index 0 and boot1.rom with index 0x40
-// (index = N << 6) from games/Tiki100/ when the core starts.
-wire rom_wr  = ioctl_download && ioctl_wr && ioctl_index[7:6] == 2'd0 && ioctl_addr < 27'h2000;
-wire prom_wr = ioctl_download && ioctl_wr && ioctl_index[7:6] == 2'd1 && ioctl_addr < 27'h100;
+// Main_MiSTer loads bootN.rom with index N << 6 from games/Tiki100/ when the
+// core starts (boot.rom if there is no boot0.rom). boot1.rom is the banking
+// PROM; boot.rom, boot2.rom and boot3.rom are the boot ROMs the OSD's
+// "Boot ROM" option chooses from (2.03w, 1.35, 1.30).
+wire [1:0] dl_slot = ioctl_index[7:6];
+wire rom_wr  = ioctl_download && ioctl_wr && dl_slot != 2'd1 && ioctl_addr < 27'h2000;
+wire prom_wr = ioctl_download && ioctl_wr && dl_slot == 2'd1 && ioctl_addr < 27'h100;
 
 wire [7:0] sys_latch;
 wire [9:0] audio;
@@ -155,9 +164,11 @@ wire       ce_pix, HSync, VSync, HBlank, VBlank;
 tiki100 tiki100
 (
 	.clk(clk_sys),
-	.reset(reset | ioctl_download),   // hold the CPU in reset while ROMs load
+	.reset_in(reset | ioctl_download),   // hold the CPU in reset while ROMs load
 
 	.rom_wr(rom_wr),
+	.rom_slot(dl_slot == 2'd0 ? 2'd0 : dl_slot - 2'd1),
+	.rom_sel(rom_sel),
 	.prom_wr(prom_wr),
 	.dl_addr(ioctl_addr[12:0]),
 	.dl_data(ioctl_dout),

@@ -3,7 +3,9 @@
 
 Files are found by CRC32, so it doesn't matter how the zip is laid out.
 Writes boot.rom (TIKI ROM 2.03w) and boot1.rom (53LS140 banking PROM),
-the same names the MiSTer core loads from games/Tiki100/.
+the same names the MiSTer core loads from games/Tiki100/, and, if the zip
+has them, boot2.rom (TIKI ROM 1.35) and boot3.rom (TIKI ROM 1.30, from the
+kontiki set) for the core's Boot ROM option.
 
 Usage: extract_roms.py <romset.zip> <output dir>
 """
@@ -14,7 +16,10 @@ import zipfile
 WANTED = {
     0x79662476: "boot.rom",   # tikirom-2.03w.u10
     0x894B756F: "boot1.rom",  # 53ls140.u4
+    0x7DAC5EE7: "boot2.rom",  # tikirom-1.35.u10
+    0xC482DCAF: "boot3.rom",  # tikirom-1.30.u10 (kontiki)
 }
+OPTIONAL = {"boot2.rom", "boot3.rom"}
 
 
 def main():
@@ -31,7 +36,7 @@ def main():
                     f.write(z.read(info))
                 print(f"{info.filename} -> {name}")
                 found.add(name)
-    missing = set(WANTED.values()) - found
+    missing = set(WANTED.values()) - found - OPTIONAL
     if missing:
         sys.exit(f"missing from {zip_path}: {', '.join(sorted(missing))}")
 

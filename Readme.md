@@ -48,16 +48,23 @@ ROMs are not included. Put these files in `games/Tiki100/` on the SD card:
 
 | SD card file | MAME file | Size | CRC32 |
 |---|---|---|---|
-| `boot.rom` | `tikirom-2.03w.u10` | 8 KB | 79662476 |
+| `boot.rom` | `tikirom-2.03w.u10` (TIKI ROM 2.03w) | 8 KB | 79662476 |
 | `boot1.rom` | `53ls140.u4` (memory banking PROM) | 256 B | 894b756f |
+| `boot2.rom` | `tikirom-1.35.u10` (TIKI ROM 1.35), optional | 8 KB | 7dac5ee7 |
+| `boot3.rom` | `tikirom-1.30.u10` (TIKI ROM 1.30), optional | 8 KB | c482dcaf |
 
-Both come from MAME's `tiki100` romset (also included in a merged `kontiki`
-set). `sim/extract_roms.py` pulls them out of the zip by CRC:
+`boot.rom` and `boot1.rom` are required. Without `boot1.rom` the banking PROM
+is empty and the CPU can't see the ROM. They come from MAME's `tiki100`
+romset, which also has 1.35; 1.30 is in the `kontiki` set (a merged
+`kontiki.zip` has all four). `sim/extract_roms.py` pulls them out of the zip
+by CRC:
 
     python3 sim/extract_roms.py kontiki.zip out/
 
-Both files are required. Without `boot1.rom` the banking PROM is empty and the
-CPU can't see the ROM.
+The OSD's **Boot ROM** option chooses between 2.03w (`boot.rom`), 1.35
+(`boot2.rom`) and 1.30 (`boot3.rom`), like swapping the ROM chip. Changing it
+resets the machine, and the choice is saved with the core's settings. If the
+chosen file isn't on the SD card, the core runs `boot.rom`.
 
 ## Disks
 
@@ -117,7 +124,11 @@ ignored by git), then:
 This builds the simulator, runs the boot ROM for 1,000,000 instructions,
 records a MAME trace of the same boot and reports the first instruction where
 they differ. Options: `ROMSET=path/to/zip`, `INSTRUCTIONS=n`,
-`MAME_SECONDS=n`.
+`MAME_SECONDS=n`, and `BOOTROM=1` or `BOOTROM=2` to check TIKI ROM 1.35
+(MAME's `tiki100 -bios v135`) or 1.30 (MAME's `kontiki`) instead of 2.03w.
+The simulator's `--boot2 FILE`, `--boot3 FILE` and `--bootrom N` options
+load and choose the extra ROMs, and `--switch-rom F:N` switches to ROM N at
+frame F, like the OSD option.
 
 MAME's scheduler sometimes takes an interrupt an instruction or two earlier or
 later than the core does (the core is cycle-exact; MAME runs the CPU in time
@@ -190,6 +201,15 @@ in its expansion slots. `sim/mame_trace.sh` empties the slots so MAME matches
 the core.
 
 ## Status
+
+Boot ROM selection: TIKI ROMs 1.35 and 1.30 match MAME's traces
+(`make trace BOOTROM=1`: 1,600,000 instructions; `BOOTROM=2`: all 1,011,776
+MAME recorded), and 2.03w still matches. Both older ROMs copy their start-up
+code to RAM one byte short and depend on RAM's power-on contents to end
+their I/O setup table, so RAM now powers up as FF like MAME's, and changing
+the boot ROM fills it with FF again. Switching from 2.03w to 1.30 at frame
+150 gives the same screen 150 frames later as MAME's `kontiki`, and 1.35's
+screen at frame 150 matches MAME's `-bios v135`.
 
 Disk writes: the core now writes disk images back to the SD card.
 `invaders.dsk` (started by TIKO's UTFØR batch command, which writes a

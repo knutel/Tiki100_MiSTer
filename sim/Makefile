@@ -2,6 +2,7 @@
 #
 #   make            build the simulator
 #   make trace      run the boot ROM in the simulator and in MAME and compare traces
+#                   (BOOTROM=1 for TIKI ROM 1.35, BOOTROM=2 for 1.30; default 0, 2.03w)
 #   make frame      compare a video frame (FRAME, default 100) with a MAME snapshot
 #   make iotest     run the CTC/DART/PIO test ROM in the simulator and in MAME
 #                   and compare the results
@@ -26,6 +27,10 @@ FRAME ?= 100
 DISK ?= $(OBJ)/tiko208r-400k.dsk
 TIKO_FRAME ?= 600
 TIKO_KEYS ?=
+BOOTROM ?= 0
+MAME_MACHINE = $(if $(filter 1,$(BOOTROM)),tiki100 -bios v135,$(if $(filter 2,$(BOOTROM)),kontiki,tiki100))
+TRACE_SUFFIX = $(if $(filter 0,$(BOOTROM)),,_rom$(BOOTROM))
+BOOTROM_ARGS = $(if $(filter 0,$(BOOTROM)),,--boot2 $(OBJ)/boot2.rom --boot3 $(OBJ)/boot3.rom --bootrom $(BOOTROM))
 
 OBJ  = obj
 T80  = ../rtl/T80
@@ -68,15 +73,15 @@ $(OBJ)/boot.rom: $(ROMSET)
 	@test -n "$(ROMSET)" || (echo "Set ROMSET=path/to/tiki100.zip"; exit 1)
 	python3 -I extract_roms.py $(ROMSET) $(OBJ)
 
-$(OBJ)/sim_trace.txt: $(OBJ)/Vsim_top $(OBJ)/boot.rom
-	$(OBJ)/Vsim_top $(OBJ)/boot.rom $(OBJ)/boot1.rom --trace $@ --instructions $(INSTRUCTIONS)
+$(OBJ)/sim_trace$(TRACE_SUFFIX).txt: $(OBJ)/Vsim_top $(OBJ)/boot.rom
+	$(OBJ)/Vsim_top $(OBJ)/boot.rom $(OBJ)/boot1.rom $(BOOTROM_ARGS) --trace $@ --instructions $(INSTRUCTIONS)
 
-$(OBJ)/mame_trace.log: $(ROMSET)
+$(OBJ)/mame_trace$(TRACE_SUFFIX).log: $(ROMSET)
 	mkdir -p $(OBJ)
-	cd $(OBJ) && sh ../mame_trace.sh $(dir $(abspath $(ROMSET))) mame_trace.log $(MAME_SECONDS)
+	cd $(OBJ) && sh ../mame_trace.sh $(dir $(abspath $(ROMSET))) mame_trace$(TRACE_SUFFIX).log $(MAME_SECONDS) "$(MAME_MACHINE)"
 
-trace: $(OBJ)/sim_trace.txt $(OBJ)/mame_trace.log
-	python3 -I compare_trace.py $(OBJ)/mame_trace.log $(OBJ)/sim_trace.txt
+trace: $(OBJ)/sim_trace$(TRACE_SUFFIX).txt $(OBJ)/mame_trace$(TRACE_SUFFIX).log
+	python3 -I compare_trace.py $(OBJ)/mame_trace$(TRACE_SUFFIX).log $(OBJ)/sim_trace$(TRACE_SUFFIX).txt
 
 frame: $(OBJ)/Vsim_top $(OBJ)/boot.rom $(OBJ)/mame_frame_$(FRAME).png
 	$(OBJ)/Vsim_top $(OBJ)/boot.rom $(OBJ)/boot1.rom --frames $$(($(FRAME) + 1)) --dump $(FRAME) --outdir $(OBJ)

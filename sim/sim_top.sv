@@ -6,6 +6,8 @@ module sim_top
 	input         clk,
 	input         reset,
 	input         rom_wr,
+	input   [1:0] rom_slot,
+	input   [1:0] rom_sel,
 	input         prom_wr,
 	input  [12:0] dl_addr,
 	input   [7:0] dl_data,
@@ -59,8 +61,10 @@ assign sd_buff_din1 = sd_buff_din[1];
 tiki100 core
 (
 	.clk(clk),
-	.reset(reset),
+	.reset_in(reset),
 	.rom_wr(rom_wr),
+	.rom_slot(rom_slot),
+	.rom_sel(rom_sel),
 	.prom_wr(prom_wr),
 	.dl_addr(dl_addr),
 	.dl_data(dl_data),

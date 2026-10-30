@@ -23,10 +23,13 @@
 module tiki100
 (
 	input         clk,          // 40 MHz clk_sys
-	input         reset,
+	input         reset_in,
 
 	// ROM loading. The CPU must be held in reset while these are written.
 	input         rom_wr,       // boot ROM byte (8 KB)
+	input   [1:0] rom_slot,     // which boot ROM rom_wr writes: 0-2
+	input   [1:0] rom_sel,      // boot ROM to run: 0-2 (change it only in reset;
+	                            // the core then clears RAM, see below)
 	input         prom_wr,      // banking PROM byte (256 B, only the first 64 are used)
 	input  [12:0] dl_addr,
 	input   [7:0] dl_data,
@@ -104,6 +107,9 @@ always @(posedge clk) per_div <= (per_div == 5'd19) ? 5'd0 : per_div + 5'd1;
 
 wire ce_2m = (per_div == 5'd0);
 
+// The whole machine stays in reset while RAM is being filled (see main RAM)
+wire reset = reset_in | ram_clear;
+
 ////////////////////////////////////////////////////////////////////////////////
 // CPU
 
@@ -180,11 +186,34 @@ wire       sel_rom1 = prom_q[1];
 wire       sel_vir  = prom_q[2];
 wire       sel_ram  = prom_q[3];
 
-// 64 KB main RAM
+// 64 KB main RAM. It powers up filled with FF, like MAME's. TIKI ROMs 1.35
+// and 1.30 depend on it: they copy their start-up code to RAM one byte
+// short, so the end marker of their I/O setup table is whatever RAM held at
+// power-on, and FF ends the table. Changing the boot ROM is a power cycle on
+// a real machine, so it fills RAM with FF again (65536 clocks, 1.6 ms) while
+// the machine is held in reset. An ordinary reset keeps RAM.
 reg  [7:0] ram[65536];
 reg  [7:0] ram_q;
+// (Two nested loops: Quartus stops a single loop after 5000 iterations.)
+initial for (int hi = 0; hi < 256; hi++) for (int lo = 0; lo < 256; lo++) ram[hi * 256 + lo] = 8'hFF;
+
+reg  [1:0] ram_rom    = 2'd0;   // the boot ROM RAM was last filled for
+reg        ram_clear  = 1'b0;
+reg [15:0] clear_a;
 always @(posedge clk) begin
-	if (mem_wr && sel_ram) ram[cpu_a] <= cpu_do;
+	if (reset_in && !ram_clear && rom_sel != ram_rom) begin
+		ram_clear <= 1'b1;
+		ram_rom   <= rom_sel;
+		clear_a   <= 16'd0;
+	end else if (ram_clear) begin
+		clear_a <= clear_a + 16'd1;
+		if (clear_a == 16'hFFFF) ram_clear <= 1'b0;
+	end
+end
+
+always @(posedge clk) begin
+	if (ram_clear) ram[clear_a] <= 8'hFF;
+	else if (mem_wr && sel_ram) ram[cpu_a] <= cpu_do;
 	ram_q <= ram[cpu_a];
 end
 
@@ -205,12 +234,21 @@ always @(posedge clk) vid_data <= vram[vid_addr];
 
 // 8 KB boot ROM in a 16 KB window; the upper 8 KB (an empty socket) reads FF.
 // ROM1 always addresses that upper half.
-reg  [7:0] rom[8192];
+//
+// Three boot ROM versions can be loaded, one per 8 KB slot, and rom_sel
+// picks the one the CPU sees, like swapping the chip in U10. A slot that
+// was never loaded falls back to slot 0.
+reg  [7:0] rom[3 * 8192];
 reg  [7:0] rom_q;
+reg  [2:0] rom_loaded = 3'b000;
+wire [1:0] rom_use = rom_loaded[rom_sel] ? rom_sel : 2'd0;
 wire [13:0] rom_a = sel_rom1 ? {1'b1, cpu_a[12:0]} : cpu_a[13:0];
 always @(posedge clk) begin
-	if (rom_wr) rom[dl_addr] <= dl_data;
-	rom_q <= rom[rom_a[12:0]];
+	if (rom_wr && rom_slot <= 2'd2) begin
+		rom[{rom_slot, dl_addr}] <= dl_data;
+		rom_loaded[rom_slot] <= 1'b1;
+	end
+	rom_q <= rom[{rom_use, rom_a[12:0]}];
 end
 
 // When several selects are active, MAME lets the last one win:

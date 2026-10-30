@@ -21,6 +21,12 @@
 //   --save0 FILE        at the end, save drive A's image with the writes
 //                       (--save1: drive B)
 //   --readonly0 1       mount drive A's image read-only (--readonly1: B)
+//   --boot2 FILE        load a second boot ROM (like boot2.rom on the MiSTer;
+//                       --boot3: a third, like boot3.rom)
+//   --bootrom N         run boot ROM N: 0 = the first argument, 1 = --boot2,
+//                       2 = --boot3 (the OSD's Boot ROM option)
+//   --switch-rom F:N    at the start of frame F, reset and switch to boot ROM
+//                       N, like changing the OSD option on the MiSTer
 //   --keys FILE         PS/2 key events, one per line: "frame scancode 1|0"
 //                       (1 = press, 0 = release). The scancode is set 2 hex,
 //                       with E0 in front for extended keys, e.g. "300 32 1"
@@ -79,6 +85,11 @@ int main(int argc, char **argv)
 	FILE *trace = nullptr, *results = nullptr;
 	bool loopback = false;
 	std::vector<unsigned char> disk[2];
+	std::vector<unsigned char> boot[3];
+	boot[0] = rom;
+	unsigned bootrom = 0;
+	long switch_frame = -1;
+	unsigned switch_rom = 0;
 	std::string save[2];
 	unsigned readonly = 0;
 	FILE *wav = nullptr;
@@ -104,6 +115,10 @@ int main(int argc, char **argv)
 		else if (a == "--disk0")        disk[0] = load(v);
 		else if (a == "--wav")          { wav = fopen(v, "wb"); if (!wav) { perror(v); return 1; } fseek(wav, 44, SEEK_SET); }
 		else if (a == "--disk1")        disk[1] = load(v);
+		else if (a == "--boot2")        boot[1] = load(v);
+		else if (a == "--boot3")        boot[2] = load(v);
+		else if (a == "--bootrom")      bootrom = atoi(v);
+		else if (a == "--switch-rom")   { if (sscanf(v, "%ld:%u", &switch_frame, &switch_rom) != 2) { fprintf(stderr, "--switch-rom F:N\n"); return 1; } }
 		else if (a == "--save0")        save[0] = v;
 		else if (a == "--save1")        save[1] = v;
 		else if (a == "--readonly0")    readonly = (readonly & ~1u) | (atoi(v) ? 1 : 0);
@@ -135,10 +150,14 @@ int main(int argc, char **argv)
 	// Download ROMs with the CPU held in reset, like hps_io does on the MiSTer.
 	top->reset = 1;
 	for (int i = 0; i < 20; i++) tick();
-	for (size_t i = 0; i < rom.size() && i < 8192; i++) {
-		top->dl_addr = i; top->dl_data = rom[i]; top->rom_wr = 1; tick();
+	for (int r = 0; r < 3; r++) {
+		top->rom_slot = r;
+		for (size_t i = 0; i < boot[r].size() && i < 8192; i++) {
+			top->dl_addr = i; top->dl_data = boot[r][i]; top->rom_wr = 1; tick();
+		}
+		top->rom_wr = 0;
 	}
-	top->rom_wr = 0;
+	top->rom_sel = bootrom;
 	for (size_t i = 0; i < prom.size() && i < 256; i++) {
 		top->dl_addr = i; top->dl_data = prom[i]; top->prom_wr = 1; tick();
 	}
@@ -314,6 +333,14 @@ int main(int argc, char **argv)
 					save_ppm(outdir + name, frame);
 				}
 				frames++;
+				if (frames == switch_frame) {
+					// Tiki100.sv holds reset until the core has the new selection
+					top->reset = 1;
+					tick(); cycles++;
+					top->rom_sel = switch_rom;
+					tick(); cycles++;
+					top->reset = 0;
+				}
 				while (!keys.empty() && keys.front().frame <= frames) {
 					key_queue.push_back(keys.front().ps2);
 					keys.pop_front();
