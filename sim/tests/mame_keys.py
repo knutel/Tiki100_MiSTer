@@ -2,7 +2,7 @@
 """Run MAME's tiki100 while replaying PS/2 key events.
 
 Usage:
-  mame_keys.py <rompath> <keys.txt> <frame> --snapshot OUT.png
+  mame_keys.py <rompath> <keys.txt> <frame> --snapshot OUT.png [--disk IMAGE.dsk]
   mame_keys.py <rompath> <keys.txt> <frame> --results OUT.txt --rom TEST.rom --prom boot1.rom
 
 keys.txt has the simulator's format: "frame scancode 1|0" per line. Each
@@ -50,6 +50,7 @@ def main():
     ap.add_argument("--results")
     ap.add_argument("--rom")
     ap.add_argument("--prom")
+    ap.add_argument("--disk", help="disk image for drive A")
     args = ap.parse_args()
     if bool(args.snapshot) == bool(args.results):
         sys.exit("give one of --snapshot and --results")
@@ -122,6 +123,7 @@ end)
         env = dict(os.environ, SDL_VIDEODRIVER="dummy", SDL_AUDIODRIVER="dummy")
         subprocess.run(["mame", "tiki100", "-rompath", rompath,
                         "-slot1", "", "-slot2", "",
+                        *(["-flop1", os.path.abspath(args.disk)] if args.disk else []),
                         "-autoboot_script", lua, "-autoboot_delay", "0",
                         "-video", "none", "-sound", "none", "-nothrottle",
                         "-skip_gameinfo", "-snapshot_directory", tmp],

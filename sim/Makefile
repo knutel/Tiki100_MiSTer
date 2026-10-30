@@ -5,6 +5,12 @@
 #   make frame      compare a video frame (FRAME, default 100) with a MAME snapshot
 #   make iotest     run the CTC/DART/PIO test ROM in the simulator and in MAME
 #                   and compare the results
+#   make tiko       boot TIKO from a disk image (DISK, default the 400K TIKO
+#                   2.08r image) and compare frame TIKO_FRAME with MAME (up to
+#                   16 pixels may differ: the cursor blinks in its own phase).
+#                   TIKO_KEYS=file replays key presses in both.
+#   make tikodir    boot TIKO, choose B (file list) from its menu and compare
+#                   the directory listing at frame 900
 #   make kbdtest    replay key presses into the keyboard test ROM in the
 #                   simulator and in MAME and compare the key matrix scans
 #
@@ -15,6 +21,9 @@ ROMSET ?= $(firstword $(wildcard ../tiki100.zip ../kontiki.zip))
 INSTRUCTIONS ?= 1000000
 MAME_SECONDS ?= 2
 FRAME ?= 100
+DISK ?= $(OBJ)/tiko208r-400k.dsk
+TIKO_FRAME ?= 600
+TIKO_KEYS ?=
 
 OBJ  = obj
 T80  = ../rtl/T80
@@ -22,10 +31,10 @@ T80_SRC = $(T80)/T80_Pack.vhd $(T80)/T80_ALU.vhd $(T80)/T80_MCode.vhd \
           $(T80)/T80_Reg.vhd $(T80)/T80.vhd $(T80)/T80pa.vhd
 GHDL_FLAGS = --std=93c -fexplicit -fsynopsys --workdir=$(OBJ)
 
-RTL = sim_top.sv ../rtl/tiki100.sv ../rtl/tiki100_video.sv ../rtl/tiki100_keyboard.sv ../rtl/z80ctc.sv \
+RTL = sim_top.sv ../rtl/tiki100.sv ../rtl/tiki100_video.sv ../rtl/tiki100_keyboard.sv ../rtl/wd1793.sv ../rtl/z80ctc.sv \
       ../rtl/z80dart.sv ../rtl/z80pio.sv
 
-.PHONY: all trace frame iotest kbdtest roms clean
+.PHONY: all trace frame iotest kbdtest tiko tikodir roms clean
 
 all: $(OBJ)/Vsim_top
 
@@ -87,6 +96,20 @@ kbdtest: $(OBJ)/Vsim_top $(OBJ)/boot.rom $(OBJ)/kbdtest.rom
 	python3 -I tests/mame_keys.py .. tests/keys_kbdtest.txt 80 --results $(OBJ)/kbdtest_mame.txt --rom $(OBJ)/kbdtest.rom --prom $(OBJ)/boot1.rom
 	diff $(OBJ)/kbdtest_mame.txt $(OBJ)/kbdtest_sim.txt
 	@echo "kbdtest: $$(grep -c A5 $(OBJ)/kbdtest_sim.txt) key matrix states, all match MAME"
+
+# Disk images come from MAME's tiki100 software list (not committed to git)
+$(OBJ)/%.dsk: ../%.zip
+	mkdir -p $(OBJ)
+	python3 -I -c "import sys, zipfile; zipfile.ZipFile(sys.argv[1]).extract(sys.argv[2], sys.argv[3])" $< $*.dsk $(OBJ)
+
+tiko: $(OBJ)/Vsim_top $(OBJ)/boot.rom $(DISK)
+	$(OBJ)/Vsim_top $(OBJ)/boot.rom $(OBJ)/boot1.rom --disk0 $(DISK) --frames $$(($(TIKO_FRAME) + 1)) --dump $(TIKO_FRAME) --outdir $(OBJ) \
+		$(if $(TIKO_KEYS),--keys $(TIKO_KEYS))
+	$(if $(TIKO_KEYS),python3 -I tests/mame_keys.py .. $(TIKO_KEYS) $(TIKO_FRAME) --snapshot $(OBJ)/mame_tiko_$(TIKO_FRAME).png --disk $(DISK),sh mame_snap.sh .. $(OBJ)/mame_tiko_$(TIKO_FRAME).png $(TIKO_FRAME) $(DISK))
+	python3 -I compare_frame.py --allow 16 $(OBJ)/mame_tiko_$(TIKO_FRAME).png $(OBJ)/frame_$$(printf %04d $(TIKO_FRAME)).ppm $(OBJ)/diff_tiko_$(TIKO_FRAME).png
+
+tikodir:
+	$(MAKE) tiko TIKO_KEYS=tests/keys_tiko_dir.txt TIKO_FRAME=900
 
 clean:
 	rm -rf $(OBJ)

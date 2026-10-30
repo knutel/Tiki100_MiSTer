@@ -6,9 +6,10 @@ school computer. MAME's `tiki100` driver is used as the hardware reference.
 Work in progress. Implemented so far: Z80 CPU (T80), 64 KB RAM, 32 KB video
 RAM, boot ROM, PROM-based memory banking, system latch, I/O decoding, ROM
 loading, video (all three graphics modes, palette, hardware scroll), and the
-Z80 CTC, DART and PIO with mode 2 (daisy chain) interrupts, and the keyboard.
-No floppy or sound yet. The serial ports, printer port and cassette aren't
-connected to the MiSTer's I/O yet.
+Z80 CTC, DART and PIO with mode 2 (daisy chain) interrupts, the keyboard, and
+the FD1797 floppy controller with two drives (read-only for now). No sound
+yet. The serial ports, printer port and cassette aren't connected to the
+MiSTer's I/O yet.
 
 Video is 1024 x 256 at 50 Hz with 15.6 kHz line rate. HDMI works through the
 MiSTer scaler. Analog VGA users get 15 kHz video: the core doesn't scandouble
@@ -57,6 +58,31 @@ set). `sim/extract_roms.py` pulls them out of the zip by CRC:
 
 Both files are required. Without `boot1.rom` the banking PROM is empty and the
 CPU can't see the ROM.
+
+## Disks
+
+Mount disk images in the OSD as Drive A and Drive B. The core takes the raw
+`.dsk` images from MAME's `tiki100` software list (for example
+`tiko208r-400k.dsk`, TIKO 2.08r), with 512-byte sectors:
+
+| Size | Format |
+|---|---|
+| 200 KB (204,800 bytes) | 40 tracks, single-sided, 10 sectors |
+| 360 KB (368,640 bytes) | 40 tracks, double-sided, 9 sectors |
+| 400 KB (409,600 bytes) | 40 tracks, double-sided, 10 sectors |
+| 800 KB (819,200 bytes) | 80 tracks, double-sided, 10 sectors |
+
+The 90 KB single density images (128-byte sectors) aren't supported.
+
+Disks are read-only for now: the core never writes to the image on the SD
+card. With a disk in drive A, the boot ROM loads it on its own; TIKO shows
+its program menu after about 10 seconds.
+
+The floppy controller is `rtl/wd1793.sv` from the ZX Spectrum core, with two
+small fixes listed at the top of the file. It works on whole sectors of the
+image rather than on the magnetic signal, so it doesn't reproduce exact disk
+timing. Each drive has its own copy, so unlike the real FD1797 the two drives
+don't share one track register.
 
 ## Simulation
 
@@ -112,6 +138,21 @@ takes the same file format for any other test.
 `sim/tests/check_keymap.py` checks the scancode table against the key
 definitions in MAME's `tiki100.cpp` source.
 
+    make tiko
+
+boots TIKO from `tiko208r-400k.dsk` (unpacked from `tiko208r-400k.zip` in the
+repository root, from MAME's software list) and compares frame 600 with
+MAME booting the same disk (up to 16 pixels may differ, for the blinking
+cursor). Options: `DISK=path/to/image.dsk`,
+`TIKO_FRAME=n`. The simulator's `--disk0 FILE` and `--disk1 FILE` options
+mount images; `TRACE_FDC=file` logs every floppy controller access.
+
+    make tikodir
+
+does the same, but also chooses B (file list) from TIKO's menu with the key
+presses in `sim/tests/keys_tiko_dir.txt`, and compares the directory listing
+at frame 900. `TIKO_KEYS=file` replays other key presses with `make tiko`.
+
 The T80 CPU is written in VHDL, which Verilator can't read. The Makefile uses
 GHDL to convert it into a Verilog netlist (`sim/obj/T80pa.v`) that is only
 used for simulation; Quartus builds from the original VHDL.
@@ -121,6 +162,13 @@ in its expansion slots. `sim/mame_trace.sh` empties the slots so MAME matches
 the core.
 
 ## Status
+
+Milestone 5 (floppy): TIKO 2.08r boots from both the 400 KB and the 200 KB
+image in the simulator. Frame 600 shows TIKO's program menu as in MAME (the
+200 KB boot matches exactly; with the 400 KB image only the blinking cursor
+differs). Choosing B (file list) from the menu gives the same directory
+listing as MAME, pixel for pixel. The boot without a disk still matches
+MAME's instruction trace.
 
 Milestone 4 (keyboard): `make kbdtest` gives the same 33 key matrix states
 as MAME, and the scancode table agrees with all 88 keys MAME maps to PC

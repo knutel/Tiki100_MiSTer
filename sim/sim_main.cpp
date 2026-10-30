@@ -15,6 +15,7 @@
 //   --results FILE      write every byte the CPU writes to port FF (the
 //                       test ROMs' result port) to FILE, one hex byte per line
 //   --loopback 1        connect each DART channel's TxD to its RxD
+//   --disk0 FILE        mount a disk image in drive A (--disk1: drive B)
 //   --keys FILE         PS/2 key events, one per line: "frame scancode 1|0"
 //                       (1 = press, 0 = release). The scancode is set 2 hex,
 //                       with E0 in front for extended keys, e.g. "300 32 1"
@@ -25,6 +26,8 @@
 //   TRACE_BYTES=1  print the first 20 opcode fetches with the byte read
 //   TRACE_BUS=1    print the CPU bus for the first 60 clocks after reset
 //   TRACE_LATCH=1  print every system latch change
+//   TRACE_FDC=FILE log floppy controller (ports 10-13, except data reads)
+//                  and system latch accesses to FILE, like MAME's tap
 
 #include <cstdio>
 #include <cstdlib>
@@ -70,6 +73,7 @@ int main(int argc, char **argv)
 
 	FILE *trace = nullptr, *results = nullptr;
 	bool loopback = false;
+	std::vector<unsigned char> disk[2];
 	struct KeyEvent { long frame; unsigned ps2; };
 	std::deque<KeyEvent> keys;      // in file order
 	std::deque<unsigned> key_queue; // due, waiting to be sent
@@ -88,6 +92,8 @@ int main(int argc, char **argv)
 		else if (a == "--outdir")       outdir = v;
 		else if (a == "--results")      { results = fopen(v, "w"); if (!results) { perror(v); return 1; } }
 		else if (a == "--loopback")     loopback = atoi(v) != 0;
+		else if (a == "--disk0")        disk[0] = load(v);
+		else if (a == "--disk1")        disk[1] = load(v);
 		else if (a == "--keys") {
 			FILE *f = fopen(v, "r");
 			if (!f) { perror(v); return 1; }
@@ -126,6 +132,52 @@ int main(int argc, char **argv)
 	for (int i = 0; i < 20; i++) tick();
 	top->reset = 0;
 
+	// Disk images: mount them like hps_io does (img_mounted pulses with
+	// img_size valid), then serve 512-byte sector reads on sd_rd: raise
+	// sd_ack, write the block into the core's buffer through
+	// sd_buff_addr/dout/wr, drop sd_ack.
+	for (int d = 0; d < 2; d++) {
+		if (disk[d].empty()) continue;
+		top->img_size = disk[d].size();
+		top->img_mounted = 1 << d;
+		for (int i = 0; i < 10; i++) tick();
+		top->img_mounted = 0;
+		for (int i = 0; i < 10; i++) tick();
+	}
+	int sd_drive = -1;      // drive being served
+	long sd_pos = -1;       // clocks since the request (-1: idle)
+	unsigned sd_lba = 0;
+	auto sd_step = [&]() {
+		if (sd_pos < 0) {
+			for (int d = 0; d < 2; d++) {
+				if (top->sd_rd & (1 << d)) {
+					sd_drive = d;
+					sd_lba = d ? top->sd_lba1 : top->sd_lba0;
+					sd_pos = 0;
+					break;
+				}
+				if (top->sd_wr & (1 << d)) {
+					fprintf(stderr, "disk %d: write to block %u ignored\n", d, d ? top->sd_lba1 : top->sd_lba0);
+				}
+			}
+			return;
+		}
+		sd_pos++;
+		long t = sd_pos - 200;          // some latency, like the ARM side
+		top->sd_buff_wr = 0;
+		if (t == 0) top->sd_ack = 1 << sd_drive;
+		else if (t > 0 && t <= 1024 && (t & 1)) {
+			unsigned i = (t - 1) / 2;
+			size_t off = (size_t)sd_lba * 512 + i;
+			const std::vector<unsigned char> &img = disk[sd_drive];
+			top->sd_buff_addr = i;
+			top->sd_buff_dout = off < img.size() ? img[off] : 0;
+			top->sd_buff_wr = 1;
+		}
+		else if (t == 1100) top->sd_ack = 0;
+		else if (t > 1200) sd_pos = -1;
+	};
+
 	// Instruction trace state. An opcode fetch is M1 + MREQ + RD. Record its
 	// address and the byte read, and log the address when the byte starts a
 	// new instruction. DD/FD and a first CB/ED are prefixes: the next M1 fetch
@@ -137,6 +189,9 @@ int main(int argc, char **argv)
 	bool trace_cycles = getenv("TRACE_CYCLES") != nullptr;   // add the CPU cycle count to each trace line
 	unsigned last_latch = 0;
 	bool last_io_write = false;
+	bool last_io_acc = false, io_wr = false;
+	unsigned io_port = 0, io_val = 0;
+	FILE *fdc_log = getenv("TRACE_FDC") ? fopen(getenv("TRACE_FDC"), "w") : nullptr;
 
 	// Video capture state. Pixels are taken on ce_pix outside blanking; a frame
 	// ends at the start of vertical blanking.
@@ -150,6 +205,7 @@ int main(int argc, char **argv)
 	for (;;) {
 		tick();
 		cycles++;
+		sd_step();
 
 		if (getenv("TRACE_BUS") && cycles < 60)
 			fprintf(stderr, "clk %3llu  A=%04X m1=%d mreq=%d rd=%d di=%02X\n", cycles,
@@ -188,6 +244,16 @@ int main(int argc, char **argv)
 			fflush(results);
 		}
 		last_io_write = io_write;
+
+		// Log at the end of each I/O access, when the read data is final
+		bool io_acc = !top->iorq_n && top->m1_n;
+		if (io_acc) { io_port = top->addr & 0xFF; io_wr = !top->wr_n; io_val = io_wr ? top->dout : top->din; }
+		else if (last_io_acc && fdc_log) {
+			bool fdc = io_port >= 0x10 && io_port <= 0x13 && !(io_port == 0x13 && !io_wr);
+			if (fdc || (io_port >= 0x1C && io_port <= 0x1F))
+				fprintf(fdc_log, "%c %02X %02X %.6f\n", io_wr ? 'W' : 'R', io_port, io_val, cycles / 40e6);
+		}
+		last_io_acc = io_acc;
 
 		if (top->sys_latch != last_latch) {
 			if (getenv("TRACE_LATCH"))

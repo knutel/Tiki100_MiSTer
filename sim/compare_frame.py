@@ -7,7 +7,10 @@ difference image: matching pixels dimmed, differing pixels bright red.
 
 Uses only the Python standard library.
 
-Usage: compare_frame.py <mame.png> <sim.ppm> [diff.png]
+With --allow N, up to N differing pixels still count as a pass (they are
+reported). Use it where a blinking cursor can be in a different phase.
+
+Usage: compare_frame.py [--allow N] <mame.png> <sim.ppm> [diff.png]
 """
 import struct
 import sys
@@ -96,11 +99,16 @@ def write_png(path, w, h, rgb):
 
 
 def main():
-    if len(sys.argv) not in (3, 4):
+    args = sys.argv[1:]
+    allow = 0
+    if len(args) >= 2 and args[0] == "--allow":
+        allow = int(args[1])
+        args = args[2:]
+    if len(args) not in (2, 3):
         sys.exit(__doc__)
-    mw, mh, mame = read_png(sys.argv[1])
-    sw, sh, sim = read_ppm(sys.argv[2])
-    write_png(sys.argv[2].rsplit(".", 1)[0] + ".png", sw, sh, sim)
+    mw, mh, mame = read_png(args[0])
+    sw, sh, sim = read_ppm(args[1])
+    write_png(args[1].rsplit(".", 1)[0] + ".png", sw, sh, sim)
     if (mw, mh) != (sw, sh):
         sys.exit(f"size differs: MAME {mw}x{mh}, simulator {sw}x{sh}")
 
@@ -115,14 +123,16 @@ def main():
                 out[i:i + 3] = b"\xff\x00\x00"
             else:
                 out[i:i + 3] = bytes(v // 3 for v in sim[i:i + 3])
-    if len(sys.argv) == 4:
-        write_png(sys.argv[3], sw, sh, out)
+    if len(args) == 3:
+        write_png(args[2], sw, sh, out)
 
     if diff == 0:
         print(f"Frames match ({sw}x{sh}).")
     else:
         print(f"{diff} pixels differ, in the box x={box[0]}..{box[2]}, y={box[1]}..{box[3]}.")
-        sys.exit(1)
+        if diff > allow:
+            sys.exit(1)
+        print(f"(allowed: up to {allow})")
 
 
 if __name__ == "__main__":

@@ -12,6 +12,18 @@ module sim_top
 	input         loopback,     // connect each DART channel's TxD to its RxD
 	input  [10:0] ps2_key,
 
+	// Disk images (hps_io's SD interface, flattened for the C++ testbench)
+	input   [1:0] img_mounted,
+	input  [63:0] img_size,
+	output [31:0] sd_lba0,
+	output [31:0] sd_lba1,
+	output  [1:0] sd_rd,
+	output  [1:0] sd_wr,
+	input   [1:0] sd_ack,
+	input   [8:0] sd_buff_addr,
+	input   [7:0] sd_buff_dout,
+	input         sd_buff_wr,
+
 	output        m1_n,
 	output        mreq_n,
 	output        rd_n,
@@ -33,6 +45,9 @@ module sim_top
 );
 
 wire [1:0] ser_txd;
+wire [31:0] sd_lba[2];
+assign sd_lba0 = sd_lba[0];
+assign sd_lba1 = sd_lba[1];
 
 tiki100 core
 (
@@ -43,6 +58,16 @@ tiki100 core
 	.dl_addr(dl_addr),
 	.dl_data(dl_data),
 	.ps2_key(ps2_key),
+	.img_mounted(img_mounted),
+	.img_size(img_size),
+	.sd_lba(sd_lba),
+	.sd_rd(sd_rd),
+	.sd_wr(sd_wr),
+	.sd_ack(sd_ack),
+	.sd_buff_addr(sd_buff_addr),
+	.sd_buff_dout(sd_buff_dout),
+	.sd_buff_din(),
+	.sd_buff_wr(sd_buff_wr),
 	.sys_latch(sys_latch),
 	.ser_rxd(loopback ? ser_txd : 2'b11),
 	.ser_txd(ser_txd),

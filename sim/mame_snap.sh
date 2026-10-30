@@ -1,7 +1,7 @@
 #!/bin/sh
 # Save a MAME snapshot of the Tiki 100 screen after a given number of frames.
 #
-# Usage: mame_snap.sh <rompath> <output.png> <frame>
+# Usage: mame_snap.sh <rompath> <output.png> <frame> [disk image for drive A]
 #
 # The snapshot is the visible 1024 x 256 area. Expansion slots are emptied,
 # as in mame_trace.sh.
@@ -10,6 +10,8 @@ set -e
 ROMPATH=$(realpath "$1")
 OUT=$(realpath "$2")
 FRAME=$3
+FLOP=""
+if [ -n "$4" ]; then FLOP="-flop1 $(realpath "$4")"; fi
 
 DIR=$(mktemp -d)
 trap 'rm -rf "$DIR"' EXIT
@@ -25,7 +27,7 @@ end)
 EOF
 
 SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy mame tiki100 \
-	-rompath "$ROMPATH" -slot1 "" -slot2 "" \
+	-rompath "$ROMPATH" -slot1 "" -slot2 "" $FLOP \
 	-autoboot_script "$DIR/snap.lua" -autoboot_delay 0 \
 	-video none -sound none -nothrottle -skip_gameinfo \
 	-snapshot_directory "$DIR/snap" -seconds_to_run 60 2>&1 | grep -v ALSA || true

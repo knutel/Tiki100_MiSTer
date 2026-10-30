@@ -34,6 +34,21 @@ module tiki100
 	// Keyboard: PS/2 key events from hps_io
 	input  [10:0] ps2_key,
 
+	// Floppy disk images through hps_io's SD interface (VDNUM=2), drive 0 in
+	// bit 0 / element 0. Images are raw sector dumps as in MAME's tiki100
+	// software list: 512-byte sectors, 10 (or 9) per track, track by track
+	// and side by side.
+	input   [1:0] img_mounted,
+	input  [63:0] img_size,
+	output [31:0] sd_lba[2],
+	output  [1:0] sd_rd,
+	output  [1:0] sd_wr,
+	input   [1:0] sd_ack,
+	input   [8:0] sd_buff_addr,
+	input   [7:0] sd_buff_dout,
+	output  [7:0] sd_buff_din[2],
+	input         sd_buff_wr,
+
 	// System latch (ports 1C-1F): drive select, ROME, VIRE, density, LEDs, motor
 	output  [7:0] sys_latch,
 
@@ -213,7 +228,7 @@ localparam IO_KEYS = 3'd0;  // keyboard
 localparam IO_SERS = 3'd1;  // Z80 DART
 localparam IO_PARS = 3'd2;  // Z80 PIO
 localparam IO_VIPB = 3'd3;  // video mode
-localparam IO_FLOP = 3'd4;  // FD1797 (milestone 5)
+localparam IO_FLOP = 3'd4;  // FD1797
 localparam IO_VIPS = 3'd5;  // palette, AY-3-8912
 localparam IO_TIMS = 3'd6;  // Z80 CTC
 localparam IO_SYL  = 3'd7;  // system latch
@@ -493,6 +508,118 @@ assign par_strobe = pb_out[0];
 assign tape_out   = pb_out[6];
 
 ////////////////////////////////////////////////////////////////////////////////
+// FD1797 floppy disk controller (ports 10-13) and two drives
+//
+// wd1793.sv (from the ZX Spectrum core) works on disk images rather than
+// magnetic flux: a read or write sector command fetches the sector from the
+// image on the SD card through hps_io. It has one image, so each drive gets
+// its own instance and the system latch's drive select bits pick which one
+// the CPU talks to. (A real FD1797 has a single track register for both
+// drives; software normally seeks again after switching drives.)
+//
+// The FD1797 differs from the WD1793 in one way that matters here: bit 1 of
+// the read/write commands selects the disk side (the SSO output). wd1793.sv
+// takes the side as an input, so it is latched here.
+//
+// DRQ and INTRQ are not connected on the Tiki 100; software polls the status
+// register. Like MAME, a drive is ready when it is selected, has a disk and
+// the motor (system latch bit 6) has been on for one revolution, 200 ms at
+// 300 rpm, to spin up. The single density bit (SDEN) is
+// ignored: only double density images are supported.
+//
+// EDSK=1 is the configuration the Spectrum core builds with. On mount it
+// reads the image's first block to look for an Extended CPC DSK header; the
+// Tiki 100's raw images don't have one, so the fixed geometry from size_code
+// and layout is used.
+
+wire [7:0] fdc_dout_d[2];
+wire       fdc_sel   = io_hit && io_grp == IO_FLOP;
+wire       drive     = syl[1];                    // drive 1 selected (wins over drive 0, as in MAME)
+wire       drive_sel = syl[0] | syl[1];
+wire       motor     = syl[6];
+
+reg [18:0] spinup;                                // 2 MHz ticks since the motor came on
+wire       spun_up   = spinup == 19'd400000;
+always @(posedge clk) begin
+	if (reset || !motor) spinup <= 19'd0;
+	else if (ce_2m && !spun_up) spinup <= spinup + 19'd1;
+end
+wire [7:0] fdc_dout  = fdc_dout_d[drive];
+
+// Side select: bit 1 of type II (read/write sector) and type III (read
+// address, read/write track) commands
+reg side;
+always @(posedge clk) begin
+	if (reset) side <= 1'b0;
+	else if (io_wr_p && fdc_sel && cpu_a[1:0] == 2'd0 && cpu_do[7]) begin
+		if (cpu_do[7:4] != 4'hD) side <= cpu_do[1];   // Dx is Force Interrupt
+	end
+end
+
+// Disk geometry from the image size. 368,640 bytes is 40 tracks, 2 sides,
+// 9 sectors; everything else has 10 sectors. Single-sided images (up to
+// 200 KB) are laid out track by track.
+reg  [19:0] dsk_size[2];
+reg   [1:0] mounted;
+always @(posedge clk) begin
+	for (int i = 0; i < 2; i++) begin
+		if (img_mounted[i]) begin
+			dsk_size[i] <= img_size[19:0];
+			mounted[i]  <= img_size != 64'd0;
+		end
+	end
+end
+
+genvar d;
+generate
+	for (d = 0; d < 2; d = d + 1) begin : fdd
+		wire sel = (drive == d) && drive_sel;
+
+		wd1793 #(.RWMODE(1), .EDSK(1)) fdc
+		(
+			.clk_sys(clk),
+			.ce(cpu_cen_p),
+			.reset(reset),
+			.io_en(fdc_sel && sel),
+			.rd(io_rd),
+			.wr(io_wr),
+			.addr(cpu_a[1:0]),
+			.din(cpu_do),
+			.dout(fdc_dout_d[d]),
+			.drq(),
+			.intrq(),
+			.busy(),
+
+			.wp(1'b1),           // read-only for now: writing back to the SD card is milestone 7
+			.size_code(dsk_size[d] == 20'd368640 ? 3'd2 : 3'd4),
+			.layout(dsk_size[d] <= 20'd204800),
+			.side(side),
+			.ready(sel && mounted[d] && spun_up),
+
+			.img_mounted(img_mounted[d]),
+			.img_size(img_size[19:0]),
+			.prepare(),
+			.sd_lba(sd_lba[d]),
+			.sd_rd(sd_rd[d]),
+			.sd_wr(sd_wr[d]),
+			.sd_ack(sd_ack[d]),
+			.sd_buff_addr(sd_buff_addr),
+			.sd_buff_dout(sd_buff_dout),
+			.sd_buff_din(sd_buff_din[d]),
+			.sd_buff_wr(sd_buff_wr),
+
+			.input_active(1'b0),
+			.input_addr(20'd0),
+			.input_data(8'd0),
+			.input_wr(1'b0),
+			.buff_addr(),
+			.buff_read(),
+			.buff_din(8'd0)
+		);
+	end
+endgenerate
+
+////////////////////////////////////////////////////////////////////////////////
 // Video
 
 tiki100_video video
@@ -526,7 +653,8 @@ always @(*) begin
 			IO_SERS: io_dout = dart_dout;
 			IO_PARS: io_dout = pio_dout;
 			IO_TIMS: io_dout = ctc_dout;
-			default: io_dout = 8'hFF;   // the FDC comes in milestone 5
+			IO_FLOP: io_dout = fdc_dout;
+			default: io_dout = 8'hFF;
 		endcase
 	end
 end

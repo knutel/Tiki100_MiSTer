@@ -56,6 +56,9 @@ assign VIDEO_ARY = (!ar) ? 12'd3 : 12'd0;
 localparam CONF_STR = {
 	"Tiki100;;",
 	"-;",
+	"S0,DSK,Drive A:;",
+	"S1,DSK,Drive B:;",
+	"-;",
 	"O[122:121],Aspect ratio,Original,Full Screen,[ARC1],[ARC2];",
 	"-;",
 	"T[0],Reset;",
@@ -71,13 +74,23 @@ wire   [1:0] buttons;
 wire [127:0] status;
 wire  [10:0] ps2_key;
 
+wire   [1:0] img_mounted;
+wire  [63:0] img_size;
+wire  [31:0] sd_lba[2];
+wire   [1:0] sd_rd, sd_wr, sd_ack;
+wire  [13:0] sd_buff_addr;
+wire   [7:0] sd_buff_dout;
+wire   [7:0] sd_buff_din[2];
+wire         sd_buff_wr;
+wire   [5:0] sd_blk_cnt[2] = '{6'd0, 6'd0};   // one 512-byte block per request
+
 wire        ioctl_download;
 wire [15:0] ioctl_index;
 wire        ioctl_wr;
 wire [26:0] ioctl_addr;
 wire  [7:0] ioctl_dout;
 
-hps_io #(.CONF_STR(CONF_STR)) hps_io
+hps_io #(.CONF_STR(CONF_STR), .VDNUM(2)) hps_io
 (
 	.clk_sys(clk_sys),
 	.HPS_BUS(HPS_BUS),
@@ -97,7 +110,20 @@ hps_io #(.CONF_STR(CONF_STR)) hps_io
 	.ioctl_dout(ioctl_dout),
 	.ioctl_wait(1'b0),
 
-	.ps2_key(ps2_key)
+	.ps2_key(ps2_key),
+
+	.img_mounted(img_mounted),
+	.img_readonly(),
+	.img_size(img_size),
+	.sd_lba(sd_lba),
+	.sd_blk_cnt(sd_blk_cnt),
+	.sd_rd(sd_rd),
+	.sd_wr(sd_wr),
+	.sd_ack(sd_ack),
+	.sd_buff_addr(sd_buff_addr),
+	.sd_buff_dout(sd_buff_dout),
+	.sd_buff_din(sd_buff_din),
+	.sd_buff_wr(sd_buff_wr)
 );
 
 ///////////////////////   CLOCKS   ///////////////////////////////
@@ -133,6 +159,17 @@ tiki100 tiki100
 	.dl_data(ioctl_dout),
 
 	.ps2_key(ps2_key),
+
+	.img_mounted(img_mounted),
+	.img_size(img_size),
+	.sd_lba(sd_lba),
+	.sd_rd(sd_rd),
+	.sd_wr(sd_wr),
+	.sd_ack(sd_ack),
+	.sd_buff_addr(sd_buff_addr[8:0]),
+	.sd_buff_dout(sd_buff_dout),
+	.sd_buff_din(sd_buff_din),
+	.sd_buff_wr(sd_buff_wr),
 
 	.sys_latch(sys_latch),
 
