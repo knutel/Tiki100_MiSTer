@@ -28,7 +28,7 @@ Rename `Template.{qpf,qsf,sdc,srf,sv}` and `Template_Q13.{qpf,qsf,srf}` to `Tiki
 
 ## Primary reference: MAME's tiki100 driver
 
-MAME's driver is the hardware spec. Current MAME keeps it in `src/mame/tiki/` (`tiki100.cpp`, `tiki100.h`); older trees used `src/mame/drivers/tiki100.cpp` and `src/mame/includes/tiki100.h`. The disk format is in `src/lib/formats/tiki100_dsk.cpp`. Read the source for anything below that's marked "verify". MAME's own TODO list: hard disk, analog/digital I/O, light pen and the 8088 CPU card are not emulated, so they're out of scope for now.
+MAME's driver is the hardware spec. Current MAME keeps it in `src/mame/tiki/` (`tiki100.cpp`, `tiki100.h`); older trees used `src/mame/drivers/tiki100.cpp` and `src/mame/includes/tiki100.h`. The disk format is in `src/lib/formats/tiki100_dsk.cpp`. Read the source for anything below that's marked "verify". MAME's own TODO list: analog/digital I/O and light pen are not emulated, so they're out of scope for now, as is the 8088 CPU card. MAME master emulates the hard disk card since 2026-09-30 (not in 0.289 or older); the core has it (see Hard disk).
 
 The Kontiki-100 technical handbook (`docs/tiki100_teknisk_handbok.pdf`, a Norwegian scan with OCR text) overrides MAME where they disagree. Don't load the whole PDF: extract it with `pdftotext -layout` and grep (the OCR puts spaces inside words). Known corrections to MAME so far: the CTC's timer mode counts 4 MHz, not 2 MHz (p. 14), and the palette write happens at the end of HBLANK (p. 37).
 
@@ -78,6 +78,7 @@ Ports are decoded from address bits A7–A2 of the low byte (groups of four). Un
 | 14–17 | VIPS | 17: AY data | 14, 15: palette data; 16: AY address; 17: AY data |
 | 18–1B | TIMS | CTC channels 0–3 | CTC channels 0–3 |
 | 1C–1F | SYL | – | System latch |
+| 20–27 | Hard disk | WD2010 (21–27), buffer (20) | Only while a hard disk image is mounted |
 
 For both the DART (MAME's `cd_ba` addressing) and the PIO (MAME's generic `read`/`write`), A0 selects the channel/port (0 = A, 1 = B) and A1 selects control (1) or data (0). So 04 = DART A data, 06 = DART A control, 08 = PIO A data, 0A = PIO A control. In MAME the DART's CTS, DCD and RI inputs are unconnected and read as active, and the default Centronics printer reports ACK and NO PAPER high on PIO port B; the core copies both.
 
@@ -162,6 +163,10 @@ FD1797 with two drives. Drive select, motor and density come from the system lat
 
 The controller models disk timing (`plans/disk-timing.md`, done): a rotating disk with MAME's track layout (2:1 interleave, 32 µs per byte), step and settle times from the handbook (pages 26-31), lost data for late bytes, and Record Not Found after 5 index pulses. Darklite's demo "The Hollow" needs it, because its loader reads one sector per frame from the VSYNC interrupt. Sector read durations match MAME's within a rotation. Known differences from MAME: MAME's drive stays ready while the motor is off (ours needs 200 ms after the motor restarts), and MAME's Read Address and Restore take longer.
 
+
+### Hard disk
+
+`rtl/tiki100_hdc.sv`: the Winchester controller card (option 100/005), a WD2010 with a 1 KB buffer at ports 20-27, following MAME master's `bus/tiki100/hdc.cpp` and `machine/wd2010.cpp`. The card exists only while an image is mounted (hps_io drive 2, "Hard disk" in the OSD); otherwise ports 20-27 read FF. With an image and no floppy, ROM 2.03w boots from it. Geometry is TIKO 4.01's 10 MB disk: 306 cylinders × 4 heads × 17 sectors of 512 bytes, block = (C × 4 + H) × 17 + S - 1. `sim/tests/make_hd_image.py` builds a bootable image from the Winchester system floppy (`wcsys`); it needs MAME master (`MAME=`). `make hdboot` tests the boot against MAME. Details and the protocol: `plans/hard-disk.md`.
 ## MiSTer integration
 
 ### Modules to reuse

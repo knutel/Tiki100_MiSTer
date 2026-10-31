@@ -16,6 +16,15 @@
 #                   the directory listing at frame 960
 #   make kbdtest    replay key presses into the keyboard test ROM in the
 #                   simulator and in MAME and compare the key matrix scans
+#   make hdboot     build a hard disk image from the Winchester system floppy
+#                   (HD_FLOPPY), boot TIKO 4.01 from it with no floppy, choose
+#                   B (file list) and compare frame HD_FRAME with MAME. Needs
+#                   a MAME with the TIKI-100 hard disk interface (master since
+#                   2026-09-30) in MAME=..., and chdman
+#   make hdwrite    the same image: run INSTALL from the hard disk, change the
+#                   automatic command and write the system back (34 sector
+#                   writes), in the simulator and in MAME; the images must be
+#                   identical
 #
 # Needs: verilator, ghdl, make, python3, z80asm, and mame for the references.
 # ROMSET is a MAME tiki100 or kontiki romset zip (not committed to git).
@@ -28,6 +37,8 @@ DISK ?= $(OBJ)/tiko208r-400k.dsk
 TIKO_FRAME ?= 600
 TIKO_KEYS ?=
 BOOTROM ?= 0
+HD_FLOPPY ?= ../disk_images/wcsys.dsk
+HD_FRAME ?= 1000
 MAME_MACHINE = $(if $(filter 1,$(BOOTROM)),tiki100 -bios v135,$(if $(filter 2,$(BOOTROM)),kontiki,tiki100))
 TRACE_SUFFIX = $(if $(filter 0,$(BOOTROM)),,_rom$(BOOTROM))
 BOOTROM_ARGS = $(if $(filter 0,$(BOOTROM)),,--boot2 $(OBJ)/boot2.rom --boot3 $(OBJ)/boot3.rom --bootrom $(BOOTROM))
@@ -38,10 +49,10 @@ T80_SRC = $(T80)/T80_Pack.vhd $(T80)/T80_ALU.vhd $(T80)/T80_MCode.vhd \
           $(T80)/T80_Reg.vhd $(T80)/T80.vhd $(T80)/T80pa.vhd
 GHDL_FLAGS = --std=93c -fexplicit -fsynopsys --workdir=$(OBJ)
 
-RTL = sim_top.sv ../rtl/tiki100.sv ../rtl/tiki100_video.sv ../rtl/tiki100_keyboard.sv ../rtl/wd1793.sv $(OBJ)/ym2149.sv ../rtl/z80ctc.sv \
+RTL = sim_top.sv ../rtl/tiki100.sv ../rtl/tiki100_video.sv ../rtl/tiki100_keyboard.sv ../rtl/tiki100_hdc.sv ../rtl/wd1793.sv $(OBJ)/ym2149.sv ../rtl/z80ctc.sv \
       ../rtl/z80dart.sv ../rtl/z80pio.sv
 
-.PHONY: all trace frame iotest kbdtest sound tiko tikodir roms clean
+.PHONY: all trace frame iotest kbdtest sound tiko tikodir hdboot hdwrite roms clean
 
 all: $(OBJ)/Vsim_top
 
@@ -136,6 +147,28 @@ tiko: $(OBJ)/Vsim_top $(OBJ)/boot.rom $(DISK)
 # Frame 960: the core's drive is only ready 200 ms after the motor restarts,
 # while MAME's stays ready, so the core finishes the listing about 13 frames
 # later than MAME (still printing at frame 900).
+# The hard disk image (and a CHD of it for MAME) from the Winchester system
+# floppy: see tests/make_hd_image.py
+$(OBJ)/wcsys-hd.hdf: tests/make_hd_image.py $(HD_FLOPPY)
+	mkdir -p $(OBJ)
+	python3 -I tests/make_hd_image.py $(HD_FLOPPY) $@ --chd $(OBJ)/wcsys-hd.chd --rompath ..
+
+hdboot: $(OBJ)/Vsim_top $(OBJ)/boot.rom $(OBJ)/wcsys-hd.hdf
+	$(OBJ)/Vsim_top $(OBJ)/boot.rom $(OBJ)/boot1.rom --hdd $(OBJ)/wcsys-hd.hdf --keys tests/keys_tiko_dir.txt \
+		--frames $$(($(HD_FRAME) + 1)) --dump $(HD_FRAME) --outdir $(OBJ)
+	python3 -I tests/mame_keys.py .. tests/keys_tiko_dir.txt $(HD_FRAME) --snapshot $(OBJ)/mame_hd_$(HD_FRAME).png --hd $(OBJ)/wcsys-hd.chd
+	python3 -I compare_frame.py --allow 16 $(OBJ)/mame_hd_$(HD_FRAME).png $(OBJ)/frame_$$(printf %04d $(HD_FRAME)).ppm $(OBJ)/diff_hd_$(HD_FRAME).png
+
+hdwrite: $(OBJ)/Vsim_top $(OBJ)/boot.rom $(OBJ)/wcsys-hd.hdf
+	$(OBJ)/Vsim_top $(OBJ)/boot.rom $(OBJ)/boot1.rom --hdd $(OBJ)/wcsys-hd.hdf --savehdd $(OBJ)/hdwrite_sim.hdf \
+		--keys tests/keys_hd_install.txt --frames 2700
+	python3 -I tests/mame_keys.py .. tests/keys_hd_install.txt 2700 --snapshot $(OBJ)/mame_hdwrite.png \
+		--hd $(OBJ)/wcsys-hd.chd --hd-out $(OBJ)/hdwrite_mame.chd
+	chdman extracthd -i $(OBJ)/hdwrite_mame.chd -o $(OBJ)/hdwrite_mame.hdf -f > /dev/null
+	cmp $(OBJ)/hdwrite_mame.hdf $(OBJ)/hdwrite_sim.hdf
+	@! cmp -s $(OBJ)/wcsys-hd.hdf $(OBJ)/hdwrite_sim.hdf || (echo "hdwrite: nothing was written"; false)
+	@echo "hdwrite: the simulator's hard disk matches MAME's after INSTALL rewrote the system"
+
 tikodir:
 	$(MAKE) tiko TIKO_KEYS=tests/keys_tiko_dir.txt TIKO_FRAME=960
 

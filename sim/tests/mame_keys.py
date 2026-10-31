@@ -2,7 +2,7 @@
 """Run MAME's tiki100 while replaying PS/2 key events.
 
 Usage:
-  mame_keys.py <rompath> <keys.txt> <frame> --snapshot OUT.png [--disk IMAGE.dsk]
+  mame_keys.py <rompath> <keys.txt> <frame> --snapshot OUT.png [--disk IMAGE.dsk] [--hd IMAGE.chd]
   mame_keys.py <rompath> <keys.txt> <frame> --results OUT.txt --rom TEST.rom --prom boot1.rom
 
 keys.txt has the simulator's format: "frame scancode 1|0" per line. Each
@@ -14,7 +14,9 @@ definitions by check_keymap.py.)
 
 MAME stops at <frame>. --snapshot saves the screen there. --results runs
 TEST.rom in place of the boot ROM and logs every byte written to port FF,
-one hex byte per line.
+one hex byte per line. --hd adds the hard disk controller card with that
+image (--hd-out saves it afterwards); $MAME selects the MAME binary
+(default: mame).
 """
 import argparse
 import os
@@ -51,6 +53,9 @@ def main():
     ap.add_argument("--rom")
     ap.add_argument("--prom")
     ap.add_argument("--disk", help="disk image for drive A")
+    ap.add_argument("--hd", help="hard disk image (CHD) for the hard disk card. Needs a MAME "
+                    "with the card's hard disk interface (master since 2026-09-30) in $MAME")
+    ap.add_argument("--hd-out", help="save MAME's hard disk image (CHD) here at the end")
     args = ap.parse_args()
     if bool(args.snapshot) == bool(args.results):
         sys.exit("give one of --snapshot and --results")
@@ -126,8 +131,13 @@ end)
             disk = os.path.join(tmp, os.path.basename(args.disk))
             shutil.copyfile(args.disk, disk)
         env = dict(os.environ, SDL_VIDEODRIVER="dummy", SDL_AUDIODRIVER="dummy")
-        subprocess.run(["mame", "tiki100", "-rompath", rompath,
-                        "-slot1", "", "-slot2", "",
+        hd = None
+        if args.hd:
+            hd = os.path.join(tmp, os.path.basename(args.hd))
+            shutil.copyfile(args.hd, hd)
+        subprocess.run([os.environ.get("MAME", "mame"), "tiki100", "-rompath", rompath,
+                        "-slot1", "", "-slot2", "hdc" if hd else "",
+                        *(["-hard1", hd] if hd else []),
                         *(["-flop1", disk] if disk else []),
                         "-autoboot_script", lua, "-autoboot_delay", "0",
                         "-video", "none", "-sound", "none", "-nothrottle",
@@ -136,6 +146,8 @@ end)
                        stderr=subprocess.DEVNULL)
         if args.snapshot:
             shutil.copyfile(os.path.join(tmp, "tiki100", "0000.png"), args.snapshot)
+        if args.hd_out:
+            shutil.copyfile(hd, args.hd_out)
 
 
 if __name__ == "__main__":

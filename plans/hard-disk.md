@@ -1,6 +1,6 @@
 # Plan: optional hard disk (Winchester controller, option 100/005)
 
-Status: Step 0 done; Step 1 (controller in the core) next.
+Status: Steps 0-3 done in simulation; waiting for the hardware test.
 
 ## Context
 
@@ -99,6 +99,6 @@ Commits: one per step (Step 0's script and key files, then the controller, the s
 Tick the boxes and add the commit hash as each step is done.
 
 - [x] Step 0: reference image and MAME protocol logs (this commit)
-- [ ] Step 1: controller in the core
-- [ ] Step 2: simulator
-- [ ] Step 3: docs
+- [x] Step 1: controller in the core
+- [x] Step 2: simulator (`make hdboot`, `make hdwrite`)
+- [x] Step 3: docs

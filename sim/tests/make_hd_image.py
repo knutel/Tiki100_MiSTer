@@ -221,8 +221,9 @@ def main():
     open(args.out, "wb").write(img)
     print(f"{args.out}: system track from INSTALL, {len(files)} files on A: ({used} of {HD_BLOCKS} blocks)")
     if args.chd:
+        # Uncompressed: MAME can only write to an uncompressed CHD
         subprocess.run(["chdman", "createhd", "-i", args.out, "-o", args.chd, "-chs", f"{CYLS},{HEADS},{SPT}",
-                        "-ss", str(SEC), "-f"], check=True, capture_output=True)
+                        "-ss", str(SEC), "-c", "none", "-f"], check=True, capture_output=True)
         print(f"{args.chd}: the same as a CHD for MAME")
 
 

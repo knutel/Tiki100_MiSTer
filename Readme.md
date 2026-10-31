@@ -109,6 +109,30 @@ settles for 15 ms. A byte the CPU is too late for is lost and sets the lost
 data status bit, as on the real chip. Each drive has its own copy, so unlike
 the real FD1797 the two drives don't share one track register.
 
+## Hard disk
+
+The core has the Tiki 100's Winchester controller card (option 100/005, a
+WD2010 at ports 20-27). The card is only there while an image is mounted
+as **Hard disk** in the OSD; without one the machine is as before. With an
+image mounted and no disk in drive A, TIKI ROM 2.03w boots from the hard
+disk. The hard disk is then A: and B:, and the floppy drive is C:. With a disk in drive A, the ROM boots the floppy as usual.
+
+The image is a raw 10 MB disk (`.hdf` or `.img`): 306 cylinders, 4 heads,
+17 sectors of 512 bytes, 10,653,696 bytes, as TIKO 4.01 uses it. The
+"Winchester systemdiskett (for TIKI med harddisk)" (MAME's `wcsys`, TIKO
+4.01) assumes a hard disk that is already set up, so
+`sim/tests/make_hd_image.py` sets one up from it the way a dealer would
+have. The floppy's INSTALL writes the system to the hard disk, run in a MAME
+that has the hard disk interface (MAME master since 2026-09-30, not yet in a
+release). The script then copies the floppy's files to A::
+
+    MAME=/path/to/mame python3 sim/tests/make_hd_image.py wcsys.dsk tiko401-hd.hdf
+
+Copy the `.hdf` to `games/Tiki100/` and mount it as Hard disk. In the
+hard disk system, C: reads 200 KB floppies (WD200C.SYS). See
+`plans/hard-disk.md` for what is known about the card and how the image is
+made.
+
 ## Printer port sync
 
 Darklite's demo "Tiki Tiki Ta" needs a hardware mod: a cable from the
@@ -224,6 +248,20 @@ does the same, but also chooses B (file list) from TIKO's menu with the key
 presses in `sim/tests/keys_tiko_dir.txt`, and compares the directory listing
 at frame 960. `TIKO_KEYS=file` replays other key presses with `make tiko`.
 
+    make hdboot MAME=/path/to/mame-master
+
+builds the hard disk image from the Winchester system floppy
+(`HD_FLOPPY`, default `disk_images/wcsys.dsk`), boots it with no floppy,
+chooses B (file list) and compares frame 1000 with MAME (which needs the hard
+disk interface, MAME master since 2026-09-30). The simulator's `--hdd FILE`
+mounts a hard disk image (`--savehdd FILE`, `--readonlyhdd 1` as for the
+floppies).
+
+    make hdwrite MAME=/path/to/mame-master
+
+runs INSTALL from the hard disk in both, changes the automatic command and
+writes the system back to the hard disk. The images must then be identical.
+
 The T80 CPU is written in VHDL, which Verilator can't read. The Makefile uses
 GHDL to convert it into a Verilog netlist (`sim/obj/T80pa.v`) that is only
 used for simulation; Quartus builds from the original VHDL.
@@ -233,6 +271,12 @@ in its expansion slots. `sim/mame_trace.sh` empties the slots so MAME matches
 the core.
 
 ## Status
+
+Hard disk: the Winchester controller card works in the simulator. TIKO 4.01
+boots from a hard disk image made from the Winchester system floppy, the
+file list matches MAME master's (`make hdboot`), and after INSTALL rewrites
+the system the simulator's image is byte for byte the same as MAME's
+(`make hdwrite`). Not yet tried on the MiSTer.
 
 Disk timing: the floppy controller now models a turning disk
 (`plans/disk-timing.md`). Darklite's demo "The Hollow" runs on the MiSTer
