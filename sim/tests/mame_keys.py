@@ -142,7 +142,7 @@ end)
                         "-autoboot_script", lua, "-autoboot_delay", "0",
                         "-video", "none", "-sound", "none", "-nothrottle",
                         "-skip_gameinfo", "-snapshot_directory", tmp],
-                       env=env, check=True, stdout=subprocess.DEVNULL,
+                       env=env, cwd=tmp, check=True, stdout=subprocess.DEVNULL,
                        stderr=subprocess.DEVNULL)
         if args.snapshot:
             shutil.copyfile(os.path.join(tmp, "tiki100", "0000.png"), args.snapshot)
