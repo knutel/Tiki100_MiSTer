@@ -131,6 +131,7 @@ IM2 daisy chain, highest priority first: CTC, DART, PIO, then the three expansio
 
 - Port A: Centronics printer data.
 - Port B: bit 0 = printer strobe (out), bit 4 = ACK (in), bit 5 = BUSY (in), bit 6 = tape out / NO PAPER in, bit 7 = tape in.
+- Bit mode (mode 3) interrupts when the logic equation becomes true, evaluated only when the port's value changes, as in MAME. A new mask doesn't interrupt even if the equation is already true. "The Hollow" loads an HSYNC mask and then HALTs, so an immediate interrupt hangs it.
 
 ### Keyboard
 
@@ -159,7 +160,7 @@ IM2 daisy chain, highest priority first: CTC, DART, PIO, then the three expansio
 
 FD1797 with two drives. Drive select, motor and density come from the system latch. Use MAME's `tiki100_dsk.cpp` for the disk image geometries. MAME's floppy software list `tiki100` shows which images exist.
 
-The controller doesn't model disk timing yet: it hands out bytes as fast as the CPU reads them. Darklite's demo "The Hollow" needs real timing, because its loader reads one sector per frame from the VSYNC interrupt. The plan for a rotating-disk model (2:1 interleave, 32 µs per byte, step and settle times, from the handbook pages 26-31 and MAME's track layout) is in `plans/disk-timing.md`.
+The controller models disk timing (`plans/disk-timing.md`, done): a rotating disk with MAME's track layout (2:1 interleave, 32 µs per byte), step and settle times from the handbook (pages 26-31), lost data for late bytes, and Record Not Found after 5 index pulses. Darklite's demo "The Hollow" needs it, because its loader reads one sector per frame from the VSYNC interrupt. Sector read durations match MAME's within a rotation. Known differences from MAME: MAME's drive stays ready while the motor is off (ours needs 200 ms after the motor restarts), and MAME's Read Address and Restore take longer.
 
 ## MiSTer integration
 

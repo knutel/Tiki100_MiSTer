@@ -13,7 +13,7 @@
 #                   16 pixels may differ: the cursor blinks in its own phase).
 #                   TIKO_KEYS=file replays key presses in both.
 #   make tikodir    boot TIKO, choose B (file list) from its menu and compare
-#                   the directory listing at frame 900
+#                   the directory listing at frame 960
 #   make kbdtest    replay key presses into the keyboard test ROM in the
 #                   simulator and in MAME and compare the key matrix scans
 #
@@ -133,8 +133,11 @@ tiko: $(OBJ)/Vsim_top $(OBJ)/boot.rom $(DISK)
 	$(if $(TIKO_KEYS),python3 -I tests/mame_keys.py .. $(TIKO_KEYS) $(TIKO_FRAME) --snapshot $(OBJ)/mame_tiko_$(TIKO_FRAME).png --disk $(DISK),sh mame_snap.sh .. $(OBJ)/mame_tiko_$(TIKO_FRAME).png $(TIKO_FRAME) $(DISK))
 	python3 -I compare_frame.py --allow 16 $(OBJ)/mame_tiko_$(TIKO_FRAME).png $(OBJ)/frame_$$(printf %04d $(TIKO_FRAME)).ppm $(OBJ)/diff_tiko_$(TIKO_FRAME).png
 
+# Frame 960: the core's drive is only ready 200 ms after the motor restarts,
+# while MAME's stays ready, so the core finishes the listing about 13 frames
+# later than MAME (still printing at frame 900).
 tikodir:
-	$(MAKE) tiko TIKO_KEYS=tests/keys_tiko_dir.txt TIKO_FRAME=900
+	$(MAKE) tiko TIKO_KEYS=tests/keys_tiko_dir.txt TIKO_FRAME=960
 
 clean:
 	rm -rf $(OBJ)

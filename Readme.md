@@ -94,10 +94,14 @@ protected, and TIKO stops with "Feil på A: Lese/skrive feil" (read/write
 error on A), as in MAME.
 
 The floppy controller is `rtl/wd1793.sv` from the ZX Spectrum core, with a few
-small fixes listed at the top of the file. It works on whole sectors of the
-image rather than on the magnetic signal, so it doesn't reproduce exact disk
-timing. Each drive has its own copy, so unlike the real FD1797 the two drives
-don't share one track register.
+changes listed at the top of the file. It works on whole sectors of the
+image rather than on the magnetic signal, but it models the disk's timing:
+the disk turns at 300 rpm with MAME's track layout (10 sectors with 2:1
+interleave), a sector's bytes come one every 32 µs while it passes under the
+head, steps take the time the command asks for (6-30 ms), and the head
+settles for 15 ms. A byte the CPU is too late for is lost and sets the lost
+data status bit, as on the real chip. Each drive has its own copy, so unlike
+the real FD1797 the two drives don't share one track register.
 
 ## Printer port sync
 
@@ -211,7 +215,7 @@ it at the end, `--readonly0 1` mounts it write protected);
 
 does the same, but also chooses B (file list) from TIKO's menu with the key
 presses in `sim/tests/keys_tiko_dir.txt`, and compares the directory listing
-at frame 900. `TIKO_KEYS=file` replays other key presses with `make tiko`.
+at frame 960. `TIKO_KEYS=file` replays other key presses with `make tiko`.
 
 The T80 CPU is written in VHDL, which Verilator can't read. The Makefile uses
 GHDL to convert it into a Verilog netlist (`sim/obj/T80pa.v`) that is only
@@ -222,6 +226,19 @@ in its expansion slots. `sim/mame_trace.sh` empties the slots so MAME matches
 the core.
 
 ## Status
+
+Disk timing: the floppy controller now models a turning disk
+(`plans/disk-timing.md`). Darklite's demo "The Hollow" runs in the
+simulator with the printer port sync option. Its loader reads one sector
+per frame and plays music while it waits for each byte; before, it hung
+after about 3 seconds waiting for bytes the controller had dropped. It also
+needed a PIO fix: in bit mode the interrupt now waits for the port to change
+after a new mask is loaded, as in MAME. For TIKO's boot, sector read times match MAME's to
+within a rotation, and `make tiko` still matches. `make tikodir` now
+compares frame 960, because the core's drive needs 200 ms to be ready after
+the motor restarts and MAME's doesn't. Invaders writes the same sectors as
+before. Tiki Tiki Ta plays the same, a little later, because its loading
+now takes real time.
 
 Darklite's demo "Tiki Tiki Ta" runs to the end on the MiSTer with the
 printer port sync option on. It needed three changes besides the option:

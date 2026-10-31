@@ -1,6 +1,6 @@
 # Plan: real disk timing in the floppy controller
 
-Status: proposed, not started.
+Status: done (steps 1-5). See Results below.
 
 ## Why
 
@@ -88,20 +88,33 @@ Start the SD block read when the command starts, as now. If the block hasn't arr
 
 Tick the boxes and add the commit hash as each step is done, so the next session knows where to pick up.
 
-- [ ] **Step 1: rotation and read timing.**
+- [x] **Step 1: rotation and read timing.**
   - Change: per-drive rotation counter; index pulse from it; type II read search by interleave slot; DRQ every 32 µs from the data start; sticky lost data; Record Not Found after 5 index pulses; the E-bit 15 ms delay; type I status bit 5 always 1.
   - Done when: The Hollow gets past frame 134 (no more `R 10 10` loop in `TRACE_FDC`), and `make tikodir` still passes.
-- [ ] **Step 2: type I timing.**
+- [x] **Step 2: type I timing.**
   - Change: step time from `r1 r0`; with V = 1, 15 ms settle plus a wait for the next ID; replaces the fixed `STATE_WAIT` delay of 4,000 clock enables (1 ms).
   - Done when: `make tiko` and `make tikodir` pass, and seek durations in `TRACE_FDC` match the step rate.
-- [ ] **Step 3: type II write timing.**
+- [x] **Step 3: type II write timing.**
   - Change: DRQ when the ID is found; lost data and abort if the first byte isn't written by +22 bytes; one byte per 32 µs after that, 00 and lost data for late bytes.
   - Done when: the invaders write test matches as before (README Status: the sectors written match MAME's apart from 15 bytes of never-written RAM).
-- [ ] **Step 4: Read Address timing.**
+- [x] **Step 4: Read Address timing.**
   - Change: wait for the next ID field, then send 6 bytes at 32 µs.
   - Done when: TIKO still boots (it uses Read Address while mounting).
-- [ ] **Step 5: docs.**
+- [x] **Step 5: docs.**
   - Change: `README.md` (the Disks section's "doesn't reproduce exact disk timing" note, and Status), `CLAUDE.md` (the Disks note), the `wd1793.sv` header list of changes, and mark this plan done.
+
+## Results
+
+All five steps were done together, in one commit (`git log -- rtl/wd1793.sv`), rather than one commit per step.
+
+- The Hollow: the loader no longer loses bytes. It then hung at frame 421 for a different reason: its HSYNC setup writes `97 FD` to the PIO and HALTs, and our PIO interrupted at once because HSYNC was already low. The PIO now evaluates the bit-mode equation only when the port's value changes, as MAME does (separate commit). With both fixes, the demo runs to frame 2000 in the simulator: intro, title picture and a tunnel effect, loading through track 9 with no lost data and the music playing throughout.
+- TIKO boot (MAME Lua tap against `TRACE_FDC`): sector read durations match MAME's to the 0.1 ms (33.7 ms for the next interleaved sector, 61.5 ms across the 5-to-6 wrap, ~210 ms after a miss). Differences: Restore at track 0 takes 13 ms in MAME and 0 here, and Read Address takes 61-69 ms in MAME and 20-30 ms here.
+- `make tiko` passes. `make tikodir` had to move from frame 900 to 960. After the motor restarts, MAME's drive is ready at once (it stays ready while the motor is off), while ours needs 200 ms. Add the rotational phase, and the listing finishes about 13 frames later than in MAME.
+- Invaders: frame 1500 matches MAME, and the written image differs from MAME's only in the known 15 bytes of sector 24.
+- Tiki Tiki Ta: the same sequence as before, shifted later by the real loading time. No hang to frame 3000.
+- `make iotest`, `make kbdtest` and `make trace` (same first divergence, 912,562) still pass.
+
+Not done: modelling MAME's sticky drive ready, and MAME's longer Read Address/Restore times. Neither is known to matter.
 
 ## Starting point for a new session
 
