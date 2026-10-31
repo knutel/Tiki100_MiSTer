@@ -17,19 +17,21 @@ module sim_top
 	input  [10:0] ps2_key,
 
 	// Disk images (hps_io's SD interface, flattened for the C++ testbench)
-	input   [1:0] img_mounted,
-	input   [1:0] img_readonly,
+	input   [2:0] img_mounted,   // bits 0-1 floppy drives, 2 the hard disk
+	input   [2:0] img_readonly,
 	input  [63:0] img_size,
 	output [31:0] sd_lba0,
 	output [31:0] sd_lba1,
-	output  [1:0] sd_rd,
-	output  [1:0] sd_wr,
-	input   [1:0] sd_ack,
+	output [31:0] sd_lba2,
+	output  [2:0] sd_rd,
+	output  [2:0] sd_wr,
+	input   [2:0] sd_ack,
 	input   [8:0] sd_buff_addr,
 	input   [7:0] sd_buff_dout,
 	input         sd_buff_wr,
 	output  [7:0] sd_buff_din0,
 	output  [7:0] sd_buff_din1,
+	output  [7:0] sd_buff_din2,
 
 	output        m1_n,
 	output        mreq_n,
@@ -53,12 +55,14 @@ module sim_top
 );
 
 wire [1:0] ser_txd;
-wire [31:0] sd_lba[2];
+wire [31:0] sd_lba[3];
 assign sd_lba0 = sd_lba[0];
 assign sd_lba1 = sd_lba[1];
-wire  [7:0] sd_buff_din[2];
+assign sd_lba2 = sd_lba[2];
+wire  [7:0] sd_buff_din[3];
 assign sd_buff_din0 = sd_buff_din[0];
 assign sd_buff_din1 = sd_buff_din[1];
+assign sd_buff_din2 = sd_buff_din[2];
 
 tiki100 core
 (

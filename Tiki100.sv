@@ -54,6 +54,7 @@ localparam CONF_STR = {
 	"-;",
 	"S0,DSK,Drive A:;",
 	"S1,DSK,Drive B:;",
+	"S2,HDFIMG,Hard disk;",
 	"-;",
 	"O[122:121],Aspect ratio,Original,Full Screen,[ARC1],[ARC2];",
 	"O[2:1],Boot ROM,2.03w,1.35,1.30;",
@@ -72,14 +73,14 @@ wire   [1:0] buttons;
 wire [127:0] status;
 wire  [10:0] ps2_key;
 
-wire   [1:0] img_mounted;
-wire   [1:0] img_readonly;
+wire   [2:0] img_mounted;
+wire   [2:0] img_readonly;
 wire  [63:0] img_size;
-wire  [31:0] sd_lba[2];
-wire   [1:0] sd_rd, sd_wr, sd_ack;
+wire  [31:0] sd_lba[3];
+wire   [2:0] sd_rd, sd_wr, sd_ack;
 wire  [13:0] sd_buff_addr;
 wire   [7:0] sd_buff_dout;
-wire   [7:0] sd_buff_din[2];
+wire   [7:0] sd_buff_din[3];
 wire         sd_buff_wr;
 wire   [5:0] sd_blk_cnt[2] = '{6'd0, 6'd0};   // one 512-byte block per request
 
@@ -89,7 +90,7 @@ wire        ioctl_wr;
 wire [26:0] ioctl_addr;
 wire  [7:0] ioctl_dout;
 
-hps_io #(.CONF_STR(CONF_STR), .VDNUM(2)) hps_io
+hps_io #(.CONF_STR(CONF_STR), .VDNUM(3)) hps_io
 (
 	.clk_sys(clk_sys),
 	.HPS_BUS(HPS_BUS),

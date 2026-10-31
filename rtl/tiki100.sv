@@ -38,21 +38,22 @@ module tiki100
 	// Keyboard: PS/2 key events from hps_io
 	input  [10:0] ps2_key,
 
-	// Floppy disk images through hps_io's SD interface (VDNUM=2), drive 0 in
-	// bit 0 / element 0. Images are raw sector dumps as in MAME's tiki100
-	// software list: 512-byte sectors, 10 (or 9) per track, track by track
-	// and side by side. Writes go back to the image on the SD card unless
-	// it is read-only.
-	input   [1:0] img_mounted,
-	input   [1:0] img_readonly,
+	// Disk images through hps_io's SD interface (VDNUM=3): floppy drives 0
+	// and 1 in bits/elements 0 and 1, the hard disk in 2. Floppy images are
+	// raw sector dumps as in MAME's tiki100 software list: 512-byte sectors,
+	// 10 (or 9) per track, track by track and side by side. The hard disk
+	// image is raw too (see tiki100_hdc.sv). Writes go back to the image on
+	// the SD card unless it is read-only.
+	input   [2:0] img_mounted,
+	input   [2:0] img_readonly,
 	input  [63:0] img_size,
-	output [31:0] sd_lba[2],
-	output  [1:0] sd_rd,
-	output  [1:0] sd_wr,
-	input   [1:0] sd_ack,
+	output [31:0] sd_lba[3],
+	output  [2:0] sd_rd,
+	output  [2:0] sd_wr,
+	input   [2:0] sd_ack,
 	input   [8:0] sd_buff_addr,
 	input   [7:0] sd_buff_dout,
-	output  [7:0] sd_buff_din[2],
+	output  [7:0] sd_buff_din[3],
 	input         sd_buff_wr,
 
 	// System latch (ports 1C-1F): drive select, ROME, VIRE, density, LEDs, motor
@@ -270,10 +271,15 @@ wire [7:0] mem_dout = sel_ram               ? ram_q  :
 ////////////////////////////////////////////////////////////////////////////////
 // I/O decoding
 //
-// Ports are decoded in groups of four from A7-A2. Ports 20-FF are unused
-// (MAME passes them to the expansion bus, which is empty here).
+// Ports are decoded in groups of four from A7-A2. Ports 20-27 are the hard
+// disk controller card while a hard disk image is mounted (see below); the
+// other ports from 20 up are unused (MAME passes them to the expansion bus).
 
 wire       io_hit = (cpu_a[7:5] == 3'd0);
+reg        hd_mounted = 1'b0;   // a hard disk image is mounted (see Hard disk)
+reg        hd_readonly;
+reg [31:0] hd_blocks;
+wire       hd_hit = (cpu_a[7:3] == 5'b00100) && hd_mounted;
 wire [2:0] io_grp = cpu_a[4:2];
 
 localparam IO_KEYS = 3'd0;  // keyboard
@@ -709,6 +715,52 @@ generate
 endgenerate
 
 ////////////////////////////////////////////////////////////////////////////////
+// Hard disk
+//
+// The Winchester controller card (option 100/005) at ports 20-27. Like the
+// floppy drives, it gets its image from hps_io's SD interface (element 2).
+// The card is only there while a hard disk image is mounted: without one
+// the ports read FF, as on a Tiki without the card, and the 2.03w ROM finds
+// no hard disk. With one and no floppy in drive A, the ROM boots from it.
+
+always @(posedge clk) begin
+	if (img_mounted[2]) begin
+		hd_mounted  <= img_size != 64'd0;
+		hd_readonly <= img_readonly[2];
+		hd_blocks   <= img_size[40:9];
+	end
+end
+
+wire [7:0] hdc_dout;
+
+tiki100_hdc hdc
+(
+	.clk(clk),
+	.ce(cpu_cen_p),
+	.reset(reset),
+
+	.sel(hd_hit),
+	.addr(cpu_a[2:0]),
+	.rd(io_rd),
+	.wr(io_wr),
+	.din(cpu_do),
+	.dout(hdc_dout),
+
+	.mounted(hd_mounted),
+	.readonly(hd_readonly),
+	.blocks(hd_blocks),
+
+	.sd_lba(sd_lba[2]),
+	.sd_rd(sd_rd[2]),
+	.sd_wr(sd_wr[2]),
+	.sd_ack(sd_ack[2]),
+	.sd_buff_addr(sd_buff_addr),
+	.sd_buff_dout(sd_buff_dout),
+	.sd_buff_din(sd_buff_din[2]),
+	.sd_buff_wr(sd_buff_wr)
+);
+
+////////////////////////////////////////////////////////////////////////////////
 // Video
 
 tiki100_video video
@@ -746,6 +798,7 @@ always @(*) begin
 			default: io_dout = 8'hFF;
 		endcase
 	end
+	if (hd_hit) io_dout = hdc_dout;
 end
 
 // IORQ together with M1 is an interrupt acknowledge, not an I/O read: the

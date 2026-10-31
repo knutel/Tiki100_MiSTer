@@ -23,6 +23,9 @@
 //   --save0 FILE        at the end, save drive A's image with the writes
 //                       (--save1: drive B)
 //   --readonly0 1       mount drive A's image read-only (--readonly1: B)
+//   --hdd FILE          mount a hard disk image (306 cylinders, 4 heads, 17
+//                       sectors of 512 bytes; see tests/make_hd_image.py).
+//                       --savehdd FILE and --readonlyhdd 1 as for drive A
 //   --boot2 FILE        load a second boot ROM (like boot2.rom on the MiSTer;
 //                       --boot3: a third, like boot3.rom)
 //   --bootrom N         run boot ROM N: 0 = the first argument, 1 = --boot2,
@@ -43,6 +46,7 @@
 //   TRACE_BUS=1    print the CPU bus for the first 60 clocks after reset
 //   TRACE_LATCH=1  print every system latch change
 //   TRACE_FDC=FILE log floppy controller (ports 10-13, except data reads)
+//                  and hard disk controller (ports 21-27) accesses
 //                  and system latch accesses to FILE, like MAME's tap
 
 #include <cstdio>
@@ -90,7 +94,7 @@ int main(int argc, char **argv)
 	FILE *trace = nullptr, *results = nullptr;
 	bool loopback = false;
 	bool printer_sync = false;
-	std::vector<unsigned char> disk[2];
+	std::vector<unsigned char> disk[3];      // drive A, drive B, hard disk
 	std::vector<unsigned char> boot[3];
 	boot[0] = rom;
 	unsigned bootrom = 0;
@@ -98,7 +102,7 @@ int main(int argc, char **argv)
 	long reset_frame = -1;
 	unsigned reset_cold = 0;
 	unsigned switch_rom = 0;
-	std::string save[2];
+	std::string save[3];
 	unsigned readonly = 0;
 	FILE *wav = nullptr;
 	unsigned long wav_samples = 0;
@@ -133,6 +137,9 @@ int main(int argc, char **argv)
 		else if (a == "--save1")        save[1] = v;
 		else if (a == "--readonly0")    readonly = (readonly & ~1u) | (atoi(v) ? 1 : 0);
 		else if (a == "--readonly1")    readonly = (readonly & ~2u) | (atoi(v) ? 2 : 0);
+		else if (a == "--hdd")          disk[2] = load(v);
+		else if (a == "--savehdd")      save[2] = v;
+		else if (a == "--readonlyhdd")  readonly = (readonly & ~4u) | (atoi(v) ? 4 : 0);
 		else if (a == "--keys") {
 			FILE *f = fopen(v, "r");
 			if (!f) { perror(v); return 1; }
@@ -181,7 +188,7 @@ int main(int argc, char **argv)
 	// sd_ack, write the block into the core's buffer through
 	// sd_buff_addr/dout/wr, drop sd_ack. Writes on sd_wr work the same way,
 	// but read the block from the core's buffer on sd_buff_din.
-	for (int d = 0; d < 2; d++) {
+	for (int d = 0; d < 3; d++) {
 		if (disk[d].empty()) continue;
 		top->img_size = disk[d].size();
 		top->img_readonly = readonly;
@@ -196,10 +203,10 @@ int main(int argc, char **argv)
 	bool sd_write = false;
 	auto sd_step = [&]() {
 		if (sd_pos < 0) {
-			for (int d = 0; d < 2; d++) {
+			for (int d = 0; d < 3; d++) {
 				if (top->sd_rd & (1 << d) || top->sd_wr & (1 << d)) {
 					sd_drive = d;
-					sd_lba = d ? top->sd_lba1 : top->sd_lba0;
+					sd_lba = d == 2 ? top->sd_lba2 : d ? top->sd_lba1 : top->sd_lba0;
 					sd_write = !(top->sd_rd & (1 << d));
 					sd_pos = 0;
 					break;
@@ -218,7 +225,7 @@ int main(int argc, char **argv)
 			unsigned i = (t - 1) / 2;
 			size_t off = (size_t)sd_lba * 512 + i;
 			if (t & 1) top->sd_buff_addr = i;
-			else if (off < img.size()) img[off] = sd_drive ? top->sd_buff_din1 : top->sd_buff_din0;
+			else if (off < img.size()) img[off] = sd_drive == 2 ? top->sd_buff_din2 : sd_drive ? top->sd_buff_din1 : top->sd_buff_din0;
 		}
 		else if (t > 0 && t <= 1024 && (t & 1)) {
 			unsigned i = (t - 1) / 2;
@@ -311,7 +318,8 @@ int main(int argc, char **argv)
 		if (io_acc) { io_port = top->addr & 0xFF; io_wr = !top->wr_n; io_val = io_wr ? top->dout : top->din; }
 		else if (last_io_acc && fdc_log) {
 			bool fdc = io_port >= 0x10 && io_port <= 0x13 && !(io_port == 0x13 && !io_wr);
-			if (fdc || (io_port >= 0x1C && io_port <= 0x1F))
+			bool hdc = io_port >= 0x21 && io_port <= 0x27;
+			if (fdc || hdc || (io_port >= 0x1C && io_port <= 0x1F))
 				fprintf(fdc_log, "%c %02X %02X %.6f\n", io_wr ? 'W' : 'R', io_port, io_val, cycles / 40e6);
 		}
 		last_io_acc = io_acc;
@@ -385,7 +393,7 @@ int main(int argc, char **argv)
 	        count, frames, cycles, cycles / 40e6);
 	if (trace) fclose(trace);
 	if (results) fclose(results);
-	for (int d = 0; d < 2; d++) {
+	for (int d = 0; d < 3; d++) {
 		if (save[d].empty()) continue;
 		FILE *f = fopen(save[d].c_str(), "wb");
 		if (!f) { perror(save[d].c_str()); return 1; }
