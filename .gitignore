@@ -49,6 +49,9 @@ c5_pin_model_dump.txt
 *.dmk
 *.hfe
 *.mfm
+*.hdf
+*.chd
+*.raw
 
 # Simulation build output
 sim/obj/
