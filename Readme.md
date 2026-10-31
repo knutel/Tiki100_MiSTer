@@ -276,7 +276,7 @@ Hard disk: the Winchester controller card works in the simulator. TIKO 4.01
 boots from a hard disk image made from the Winchester system floppy, the
 file list matches MAME master's (`make hdboot`), and after INSTALL rewrites
 the system the simulator's image is byte for byte the same as MAME's
-(`make hdwrite`). Not yet tried on the MiSTer.
+(`make hdwrite`). It works on the MiSTer too.
 
 Disk timing: the floppy controller now models a turning disk
 (`plans/disk-timing.md`). Darklite's demo "The Hollow" runs on the MiSTer

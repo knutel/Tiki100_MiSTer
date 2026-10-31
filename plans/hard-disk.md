@@ -1,6 +1,6 @@
 # Plan: optional hard disk (Winchester controller, option 100/005)
 
-Status: Steps 0-3 done in simulation; waiting for the hardware test.
+Status: done. Works in simulation and on the MiSTer.
 
 ## Context
 
