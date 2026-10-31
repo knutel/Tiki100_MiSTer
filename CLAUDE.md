@@ -1,8 +1,12 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 # Tiki 100 core for MiSTer
 
-An FPGA recreation of the Tiki 100 (Tiki Data, Oslo, 1984), a Z80 home and school computer, as a MiSTer core for the DE10-Nano.
+An FPGA recreation of the Tiki 100 (Tiki Data, Oslo, 1984), a Z80 home and school computer, as a MiSTer core for the DE10-Nano, created from MiSTer-devel/Template_MiSTer.
 
-The project was created from MiSTer-devel/Template_MiSTer. The template builds and runs on the owner's MiSTer. Nothing Tiki-specific has been written yet.
+Milestones 1-6 below are done and run on the owner's MiSTer: CPU, memory, video, CTC/DART/PIO, keyboard, floppy (with disk timing), sound, plus boot ROM selection, disk write-back, the printer port sync mod and the hard disk card. The README's Status section has the details and test results; `plans/` has work in progress and finished plans.
 
 ## Working with the owner
 
@@ -22,9 +26,12 @@ The project was created from MiSTer-devel/Template_MiSTer. The template builds a
 - **Language:** SystemVerilog/Verilog by default. Ask the owner before writing a module in MyHDL. If MyHDL is used, keep the Python under `myhdl/`, commit the generated Verilog under `rtl/` so the core builds without Python, and document the regeneration command in the README.
 - Keep commits small, one milestone step at a time.
 
-## If the repo still uses Template names
+## Gotchas
 
-Rename `Template.{qpf,qsf,sdc,srf,sv}` and `Template_Q13.{qpf,qsf,srf}` to `Tiki100*` with `git mv`, then update `PROJECT_REVISION` in the `.qpf` files, the `Template.sdc` and `Template.sv` entries in `files.qip`, and the first CONF_STR entry (`"Template;;"` becomes `"Tiki100;;"`). The CONF_STR name also sets the SD card folder: `games/Tiki100/`.
+- **Line endings:** `Tiki100.sv`, `files.qip`, `rtl/wd1793.sv` and other template files are CRLF; `.gitignore` mixes CRLF (template lines) and LF (project lines). Python or `sed` rewrites can silently convert a whole file. Check with `file` and keep the existing endings.
+- **The simulator doesn't compile `Tiki100.sv`** (`sim/sim_top.sv` instantiates `rtl/tiki100.sv` directly). Changes to the `emu` glue, CONF_STR or `hps_io` wiring are only checked by the owner's Quartus build, so check widths by hand. All of `hps_io`'s per-drive arrays (`sd_lba`, `sd_blk_cnt`, `sd_buff_din`, ...) must have `VDNUM` elements.
+- **Quartus 17 stops a single loop after 5000 iterations:** nest loops (see the RAM `initial` block in `rtl/tiki100.sv`).
+- **MAME writes to disk images:** give it copies. A compressed CHD is read-only to MAME (writes go to a `diff/` file), so create CHDs with `chdman ... -c none`.
 
 ## Primary reference: MAME's tiki100 driver
 
@@ -44,7 +51,7 @@ The Kontiki-100 technical handbook (`docs/tiki100_teknisk_handbok.pdf`, a Norweg
 | FD1797 (or FD1767) | 1 MHz | Two 5.25" drives; MAME defaults to 80-track double-sided |
 | Video | 20 MHz dot clock (separate crystal) | No CRTC chip; discrete logic |
 
-With `clk_sys` = 40 MHz: dot clock enable = ÷2, CPU and CTC = ÷10, AY, DART, PIO and CTC TRG0/TRG1 = ÷20, FDC = ÷40. The template's PLL currently outputs 20 MHz; change `output_clock_frequency0` in `rtl/pll/pll_0002.v` to `"40.000000 MHz"` (or ask the owner to regenerate it in the Quartus IP editor).
+With `clk_sys` = 40 MHz (`rtl/pll/pll_0002.v`): dot clock enable = ÷2, CPU and CTC = ÷10 (`cpu_cen_p` in `rtl/tiki100.sv`), AY, DART, PIO and CTC TRG0/TRG1 = ÷20 (`ce_2m`). The floppy controller runs on `cpu_cen_p`; its timing model counts in those 4 MHz ticks.
 
 ### ROMs (MAME romset `tiki100`)
 
@@ -163,10 +170,42 @@ FD1797 with two drives. Drive select, motor and density come from the system lat
 
 The controller models disk timing (`plans/disk-timing.md`, done): a rotating disk with MAME's track layout (2:1 interleave, 32 µs per byte), step and settle times from the handbook (pages 26-31), lost data for late bytes, and Record Not Found after 5 index pulses. Darklite's demo "The Hollow" needs it, because its loader reads one sector per frame from the VSYNC interrupt. Sector read durations match MAME's within a rotation. Known differences from MAME: MAME's drive stays ready while the motor is off (ours needs 200 ms after the motor restarts), and MAME's Read Address and Restore take longer.
 
-
 ### Hard disk
 
 `rtl/tiki100_hdc.sv`: the Winchester controller card (option 100/005), a WD2010 with a 1 KB buffer at ports 20-27, following MAME master's `bus/tiki100/hdc.cpp` and `machine/wd2010.cpp`. The card exists only while an image is mounted (hps_io drive 2, "Hard disk" in the OSD); otherwise ports 20-27 read FF. With an image and no floppy, ROM 2.03w boots from it. Geometry is TIKO 4.01's 10 MB disk: 306 cylinders × 4 heads × 17 sectors of 512 bytes, block = (C × 4 + H) × 17 + S - 1. `sim/tests/make_hd_image.py` builds a bootable image from the Winchester system floppy (`wcsys`); it needs MAME master (`MAME=`). `make hdboot` tests the boot against MAME. Details and the protocol: `plans/hard-disk.md`.
+
+## Code map
+
+- `Tiki100.sv` (module `emu`): CONF_STR and OSD status bits (`[0]` OSD Reset, `[2:1]` boot ROM, `[4]` printer port sync, 0 = on; `[122:121]` aspect ratio), `hps_io` (`VDNUM=3`: drives A, B and the hard disk), boot ROM download routing (`ioctl_index[7:6]` slot), resets (OSD Reset and changing the boot ROM are warm resets; the MiSTer's reset button, `buttons[1]`, is a power-on reset that refills RAM), audio and video to the framework.
+- `rtl/tiki100.sv`: the machine. T80 CPU, ROM/RAM/VRAM and PROM banking, power-on RAM fill, I/O decode and the `io_dout` read mux, system latch, keyboard counter, IM2 daisy chain (`int_vector`, `reti` decoding), the two `wd1793` instances (`fdd[0]`, `fdd[1]`) and the hard disk card.
+- `rtl/tiki100_video.sv` (shifter, palette, sync; `PER_GROUP` parameter), `rtl/tiki100_keyboard.sv` (PS/2 scancode to matrix table, also parsed by `sim/tests/mame_keys.py` and `check_keymap.py`), `rtl/z80ctc.sv`, `rtl/z80dart.sv`, `rtl/z80pio.sv` (written for this core, following MAME), `rtl/tiki100_hdc.sv` (WD2010 card), `rtl/wd1793.sv` (FD1797, adapted from the Spectrum core), `rtl/ym2149.sv`, `rtl/T80/`.
+- `sim/`: `sim_top.sv` flattens the core's ports for the C++ testbench `sim_main.cpp` (frame dumps, key replay, SD card emulation for the disk images, traces). The Makefile converts the VHDL T80 to Verilog with GHDL for Verilator. Outputs, extracted ROMs and disk images go in `sim/obj/` (gitignored).
+
+## Commands
+
+Simulation (from `sim/`; needs verilator, ghdl, z80asm, python3 and mame; ROMs come from `kontiki.zip` in the repo root):
+
+    make                  # build sim/obj/Vsim_top
+    make roms             # extract the ROMs from the romset zip into sim/obj/
+    make trace            # boot ROM instruction trace vs MAME (BOOTROM=1/2 for ROM 1.35/1.30)
+    make frame FRAME=100  # compare a boot screen frame with a MAME snapshot
+    make iotest           # CTC/DART/PIO test ROM vs MAME
+    make kbdtest          # key replay into the keyboard test ROM vs MAME
+    make sound            # AY test ROM vs MAME (register read-back and recorded sound)
+    make tiko             # boot TIKO from a floppy and compare frame TIKO_FRAME with MAME (DISK=, TIKO_KEYS=)
+    make tikodir          # tiko plus the menu's file list
+    make hdboot MAME=...  # hard disk boot vs MAME (needs MAME master and chdman, see Hard disk)
+    make hdwrite MAME=... # hard disk writes vs MAME
+
+Running the simulator directly (options are documented at the top of `sim/sim_main.cpp`):
+
+    obj/Vsim_top obj/boot.rom obj/boot1.rom --disk0 copy.dsk --frames 600 --dump 600 --outdir DIR \
+        [--keys FILE] [--printer-sync 1] [--hdd FILE] [--reset F:C] [--trace FILE] [--wav FILE]
+
+`TRACE_FDC=file` logs floppy and hard disk controller accesses. The simulator runs at about 1.3 frames per second, so run long jobs in the background and in parallel. Rebuilding `Vsim_top` while a run is in progress is safe, but don't start several `make` targets at once after an RTL or Makefile change, because they all try to rebuild it.
+
+The FPGA build is done by the owner in Quartus (`Tiki100.qpf`); the result is `output_files/Tiki100.rbf`, and errors are in `output_files/Tiki100.map.rpt`.
+
 ## MiSTer integration
 
 ### Modules to reuse
@@ -175,45 +214,33 @@ From MiSTer-devel/ZX-Spectrum_MISTer, `rtl/`:
 
 - `T80/`: Z80 CPU. Use `T80pa` (separate positive and negative clock enables) or `T80s`.
 - `ym2149.sv`: AY-3-8910-family sound. Our copy in `rtl/` is unmodified; `sim/Makefile` makes a simulation-only copy because Verilator rejects its volume table declaration.
-- `wd1793.sv`: WD1793-family floppy controller. It has `size_code`, `layout`, `side` and `ready` inputs and an SD-backed mode (`RWMODE=1`) for reading images through `hps_io`'s `sd_*` interface. Our copy in `rtl/` has small fixes (listed in its header); keep them if you update it from upstream. `plans/disk-timing.md` describes the planned timing model, which will make it diverge further from upstream.
+- `wd1793.sv`: WD1793-family floppy controller with an SD-backed mode (`RWMODE=1`) for reading images through `hps_io`'s `sd_*` interface. Our copy has diverged from upstream: fixes and a rotating-disk timing model, all listed in its header. Don't replace it from upstream.
 
-The Spectrum core has no Z80 CTC, PIO or DART. Look for GPL-compatible implementations in other MiSTer/MiST cores first. If you write your own, implement only the modes the TIKI ROM and TIKO use at first, and test them against MAME's behavior.
+The Spectrum core has no Z80 CTC, PIO or DART; this core's are its own, tested against MAME with `make iotest`.
 
 ### ROM loading
 
-At core start, Main_MiSTer loads `boot0.rom`…`boot3.rom` from `games/Tiki100/` with `ioctl_index` = N << 6 (so 0x00, 0x40, 0x80, 0xC0), then falls back to `boot.rom` (index 0) if there's no `boot0.rom`. Plan:
-
-- `boot.rom` = TIKI ROM (8 KB) → index 0x00
-- `boot1.rom` = `53ls140.u4` PROM (256 bytes) → index 0x40
-
-Write `ioctl_dout` to block RAM when `ioctl_wr` is high during `ioctl_download`, and hold the CPU in reset until downloading finishes. Document the files the owner needs to place in the README.
+At core start, Main_MiSTer loads `boot0.rom`…`boot3.rom` from `games/Tiki100/` with `ioctl_index` = N << 6 (so 0x00, 0x40, 0x80, 0xC0), then falls back to `boot.rom` (index 0) if there's no `boot0.rom`. The core uses `boot.rom` = TIKI ROM 2.03w, `boot1.rom` = the banking PROM, `boot2.rom`/`boot3.rom` = TIKI ROM 1.35/1.30 (the OSD's Boot ROM option). The CPU is held in reset while they load. The README lists the files.
 
 ### Video, audio, input
 
 - `CLK_VIDEO` = `clk_sys`, `CE_PIXEL` = the 20 MHz enable. Set the aspect ratio to 4:3 in the framework (the template has the `ARC` options). 15 kHz output works with the framework's scandoubler.
 - AY output is mono; send it to both audio channels.
 - Keyboard input comes from `hps_io`'s `ps2_key` (bit 10 toggles on each event, bit 9 = pressed, bit 8 = extended, bits 7–0 = scancode).
-- Disk images: set `hps_io`'s `VDNUM=2` and add `S0`/`S1` mount entries to CONF_STR.
+- Disk images: `hps_io` `VDNUM=3`, CONF_STR entries `S0`/`S1` (floppies) and `S2` (hard disk).
 
 ## Testing
 
-- **Simulation first.** Use Verilator (or Icarus) with a C++ or cocotb testbench that runs the TIKI ROM. Keep testbenches under `sim/`.
+- **Simulation first**, against MAME as the reference (see Commands). The test targets compare traces, frames, test ROM results or disk images with MAME's.
+- **Known, expected differences from MAME:** `make trace` for ROM 2.03w diverges at instruction 912,562 because the CTC timer counts 4 MHz (handbook) instead of MAME's 2 MHz; `tikodir` compares frame 960 because the core's drive needs 200 ms to be ready after the motor restarts.
 - **Investigating software that misbehaves:** see `sim/DEBUGGING.md` (simulator probes, frame-limited traces, memory dumps, MAME Lua taps and debugger, time budgets). Work in progress is tracked in `plans/`; check there first when starting a session.
-- **CPU trace check:** run MAME with `mame tiki100 -debug`, type `trace tiki100.log` in the debugger, let it run, and compare the instruction trace with the simulated CPU's. Report the first divergence.
-- **Video check:** have the simulator dump frames as PNG and compare them with MAME snapshots of the same screen.
-- **Hardware check:** after each milestone, tell the owner which `.rbf` and ROM files to copy, and what should appear.
+- **Hardware check:** after each change that needs it, tell the owner which `.rbf`, ROM and disk image files to copy, and what should appear.
 
 ## Milestones
 
-Do these in order. Each one should be simulated before it's tried on hardware.
+1-6 are done: CPU/memory/banking/I/O decode, video, CTC/PIO/DART with IM2 interrupts, keyboard, floppy, sound. Done from the extras: disk write-back to SD, boot ROM selection in the OSD, the printer port sync mod, floppy disk timing, the hard disk card.
 
-1. **CPU, memory, banking, I/O decode.** Z80 + ROM + RAM + VRAM + PROM banking + system latch + ROM loading. Done when the simulated trace matches MAME's for the first several thousand instructions.
-2. **Video.** Shifter, palette, scroll, sync timing, framework video output. Done when the boot ROM's screen shows on the MiSTer.
-3. **CTC, PIO, DART and IM2 interrupts.**
-4. **Keyboard.** PS/2 to matrix.
-5. **Floppy.** FD1797 plus disk mounting. Done when TIKO boots from a disk image.
-6. **Sound.** AY-3-8912 through the framework's audio output.
-7. **Extras.** Writing disk changes back to SD, cassette via MiSTer's ADC input, serial, printer, ROM version selection in the menu, per-16-dot video timing (`PER_GROUP`), optional 31 kHz scandoubled analog VGA output (needs a `CLK_VIDEO` of at least 4× the 20 MHz dot clock for `video_mixer`).
+Remaining extras: cassette via MiSTer's ADC input, serial and printer ports to MiSTer I/O, per-16-dot video timing (`PER_GROUP` exists in `rtl/tiki100_video.sv` but is off), optional 31 kHz scandoubled analog VGA output (needs a `CLK_VIDEO` of at least 4× the 20 MHz dot clock for `video_mixer`). Simulate each change before it's tried on hardware.
 
 ## Links
 
