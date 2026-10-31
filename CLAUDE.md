@@ -37,7 +37,7 @@ The Kontiki-100 technical handbook (`docs/tiki100_teknisk_handbok.pdf`, a Norweg
 | Part | Clock | Notes |
 |---|---|---|
 | Z80 CPU | 4 MHz (8 MHz crystal ÷ 2) | IM2 interrupts via daisy chain |
-| Z80 CTC | 4 MHz (CPU clock) | Timers and baud rates. Timer mode counts 4 MHz (handbook p. 14; MAME wrongly uses 2 MHz). TRG0/TRG1 count 2 MHz |
+| Z80 CTC | 4 MHz (CPU clock) | Timers and baud rates. Timer mode counts 4 MHz (handbook p. 14, and p. 111: the monitor's channel 3 interrupt comes every 8 ms; MAME wrongly uses 2 MHz). TRG0/TRG1 count 2 MHz |
 | Z80 DART | 2 MHz in MAME | Two serial ports. Baud clocks come from the CTC, so its own clock doesn't change behavior |
 | Z80 PIO | 2 MHz in MAME | Centronics printer and cassette. No internal timing, so its own clock doesn't change behavior |
 | AY-3-8912 | 2 MHz | Mono output; I/O port A drives the scroll register |
@@ -159,6 +159,8 @@ IM2 daisy chain, highest priority first: CTC, DART, PIO, then the three expansio
 
 FD1797 with two drives. Drive select, motor and density come from the system latch. Use MAME's `tiki100_dsk.cpp` for the disk image geometries. MAME's floppy software list `tiki100` shows which images exist.
 
+The controller doesn't model disk timing yet: it hands out bytes as fast as the CPU reads them. Darklite's demo "The Hollow" needs real timing, because its loader reads one sector per frame from the VSYNC interrupt. The plan for a rotating-disk model (2:1 interleave, 32 µs per byte, step and settle times, from the handbook pages 26-31 and MAME's track layout) is in `plans/disk-timing.md`.
+
 ## MiSTer integration
 
 ### Modules to reuse
@@ -167,7 +169,7 @@ From MiSTer-devel/ZX-Spectrum_MISTer, `rtl/`:
 
 - `T80/`: Z80 CPU. Use `T80pa` (separate positive and negative clock enables) or `T80s`.
 - `ym2149.sv`: AY-3-8910-family sound. Our copy in `rtl/` is unmodified; `sim/Makefile` makes a simulation-only copy because Verilator rejects its volume table declaration.
-- `wd1793.sv`: WD1793-family floppy controller. It has `size_code`, `layout`, `side` and `ready` inputs and an SD-backed mode (`RWMODE=1`) for reading images through `hps_io`'s `sd_*` interface. Our copy in `rtl/` has small fixes (listed in its header); keep them if you update it from upstream.
+- `wd1793.sv`: WD1793-family floppy controller. It has `size_code`, `layout`, `side` and `ready` inputs and an SD-backed mode (`RWMODE=1`) for reading images through `hps_io`'s `sd_*` interface. Our copy in `rtl/` has small fixes (listed in its header); keep them if you update it from upstream. `plans/disk-timing.md` describes the planned timing model, which will make it diverge further from upstream.
 
 The Spectrum core has no Z80 CTC, PIO or DART. Look for GPL-compatible implementations in other MiSTer/MiST cores first. If you write your own, implement only the modes the TIKI ROM and TIKO use at first, and test them against MAME's behavior.
 
@@ -190,6 +192,7 @@ Write `ioctl_dout` to block RAM when `ioctl_wr` is high during `ioctl_download`,
 ## Testing
 
 - **Simulation first.** Use Verilator (or Icarus) with a C++ or cocotb testbench that runs the TIKI ROM. Keep testbenches under `sim/`.
+- **Investigating software that misbehaves:** see `sim/DEBUGGING.md` (simulator probes, frame-limited traces, memory dumps, MAME Lua taps and debugger, time budgets). Work in progress is tracked in `plans/`; check there first when starting a session.
 - **CPU trace check:** run MAME with `mame tiki100 -debug`, type `trace tiki100.log` in the debugger, let it run, and compare the instruction trace with the simulated CPU's. Report the first divergence.
 - **Video check:** have the simulator dump frames as PNG and compare them with MAME snapshots of the same screen.
 - **Hardware check:** after each milestone, tell the owner which `.rbf` and ROM files to copy, and what should appear.
