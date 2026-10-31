@@ -66,6 +66,12 @@ The OSD's **Boot ROM** option chooses between 2.03w (`boot.rom`), 1.35
 resets the machine, and the choice is saved with the core's settings. If the
 chosen file isn't on the SD card, the core runs `boot.rom`.
 
+There are two resets. The OSD's **Reset** is like the Tiki 100's own reset
+button: memory keeps its contents. The MiSTer's reset button is a power-on
+reset: main RAM is filled again with its power-on contents (00 with 2.03w,
+FF with 1.35 and 1.30). Use the button before running Darklite's "Tiki Tiki
+Ta" a second time, because the demo needs RAM as it is at power-on.
+
 ## Disks
 
 Mount disk images in the OSD as Drive A and Drive B. The core takes the raw

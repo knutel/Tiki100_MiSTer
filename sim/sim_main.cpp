@@ -29,6 +29,9 @@
 //                       2 = --boot3 (the OSD's Boot ROM option)
 //   --switch-rom F:N    at the start of frame F, reset and switch to boot ROM
 //                       N, like changing the OSD option on the MiSTer
+//   --reset F:C         at the start of frame F, reset: C = 0 for a warm reset
+//                       (the OSD's Reset, RAM kept), 1 for a power-on reset
+//                       (the MiSTer's reset button, RAM filled again)
 //   --keys FILE         PS/2 key events, one per line: "frame scancode 1|0"
 //                       (1 = press, 0 = release). The scancode is set 2 hex,
 //                       with E0 in front for extended keys, e.g. "300 32 1"
@@ -92,6 +95,8 @@ int main(int argc, char **argv)
 	boot[0] = rom;
 	unsigned bootrom = 0;
 	long switch_frame = -1;
+	long reset_frame = -1;
+	unsigned reset_cold = 0;
 	unsigned switch_rom = 0;
 	std::string save[2];
 	unsigned readonly = 0;
@@ -122,6 +127,7 @@ int main(int argc, char **argv)
 		else if (a == "--boot2")        boot[1] = load(v);
 		else if (a == "--boot3")        boot[2] = load(v);
 		else if (a == "--bootrom")      bootrom = atoi(v);
+		else if (a == "--reset")        { if (sscanf(v, "%ld:%u", &reset_frame, &reset_cold) != 2) { fprintf(stderr, "--reset F:C\n"); return 1; } }
 		else if (a == "--switch-rom")   { if (sscanf(v, "%ld:%u", &switch_frame, &switch_rom) != 2) { fprintf(stderr, "--switch-rom F:N\n"); return 1; } }
 		else if (a == "--save0")        save[0] = v;
 		else if (a == "--save1")        save[1] = v;
@@ -345,6 +351,14 @@ int main(int argc, char **argv)
 					top->rom_sel = switch_rom;
 					tick(); cycles++;
 					top->reset = 0;
+				}
+				if (frames == reset_frame) {
+					top->reset = 1;
+					top->cold_reset = reset_cold;
+					tick(); cycles++;
+					tick(); cycles++;
+					top->reset = 0;
+					top->cold_reset = 0;
 				}
 				while (!keys.empty() && keys.front().frame <= frames) {
 					key_queue.push_back(keys.front().ps2);

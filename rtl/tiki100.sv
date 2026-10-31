@@ -24,6 +24,7 @@ module tiki100
 (
 	input         clk,          // 40 MHz clk_sys
 	input         reset_in,
+	input         cold_reset,   // with reset_in: power-on reset, RAM is filled again
 
 	// ROM loading. The CPU must be held in reset while these are written.
 	input         rom_wr,       // boot ROM byte (8 KB)
@@ -196,8 +197,9 @@ wire       sel_ram  = prom_q[3];
 //   start-up code to RAM one byte short, so the end marker of their I/O setup
 //   table is whatever RAM held at power-on, and FF ends the table.
 // Changing the boot ROM is a power cycle on a real machine, so RAM is filled
-// again (65536 clocks, 1.6 ms) while the machine is held in reset. An
-// ordinary reset keeps RAM.
+// again (65536 clocks, 1.6 ms) while the machine is held in reset. So is
+// cold_reset (the MiSTer's reset button). An ordinary reset (the OSD's) keeps
+// RAM, like the Tiki 100's own reset.
 reg  [7:0] ram[65536];
 reg  [7:0] ram_q;
 // The core starts with boot ROM 0 (2.03w) selected. (Two nested loops:
@@ -208,7 +210,7 @@ reg  [1:0] ram_rom    = 2'd0;   // the boot ROM RAM was last filled for
 reg        ram_clear  = 1'b0;
 reg [15:0] clear_a;
 always @(posedge clk) begin
-	if (reset_in && !ram_clear && rom_sel != ram_rom) begin
+	if (reset_in && !ram_clear && (rom_sel != ram_rom || cold_reset)) begin
 		ram_clear <= 1'b1;
 		ram_rom   <= rom_sel;
 		clear_a   <= 16'd0;

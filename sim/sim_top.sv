@@ -5,6 +5,7 @@ module sim_top
 (
 	input         clk,
 	input         reset,
+	input         cold_reset,   // with reset: power-on reset (the MiSTer's reset button)
 	input         rom_wr,
 	input   [1:0] rom_slot,
 	input   [1:0] rom_sel,
@@ -63,6 +64,7 @@ tiki100 core
 (
 	.clk(clk),
 	.reset_in(reset),
+	.cold_reset(cold_reset),
 	.rom_wr(rom_wr),
 	.rom_slot(rom_slot),
 	.rom_sel(rom_sel),

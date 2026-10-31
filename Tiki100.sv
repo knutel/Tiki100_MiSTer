@@ -166,6 +166,7 @@ tiki100 tiki100
 (
 	.clk(clk_sys),
 	.reset_in(reset | ioctl_download),   // hold the CPU in reset while ROMs load
+	.cold_reset(buttons[1]),             // the MiSTer's reset button: power-on reset, clears RAM
 
 	.rom_wr(rom_wr),
 	.rom_slot(dl_slot == 2'd0 ? 2'd0 : dl_slot - 2'd1),
