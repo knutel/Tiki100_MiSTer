@@ -82,7 +82,7 @@ wire  [13:0] sd_buff_addr;
 wire   [7:0] sd_buff_dout;
 wire   [7:0] sd_buff_din[3];
 wire         sd_buff_wr;
-wire   [5:0] sd_blk_cnt[2] = '{6'd0, 6'd0};   // one 512-byte block per request
+wire   [5:0] sd_blk_cnt[3] = '{6'd0, 6'd0, 6'd0};   // one 512-byte block per request
 
 wire        ioctl_download;
 wire [15:0] ioctl_index;
