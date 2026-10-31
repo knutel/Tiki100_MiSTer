@@ -455,7 +455,10 @@ end
 ////////////////////////////////////////////////////////////////////////////////
 // Z80 CTC (ports 18-1B)
 //
-// TRG0 and TRG1 count a 2 MHz clock. Channel 0's output (BAR0) clocks
+// The CTC runs on the CPU clock, so timer mode counts 4 MHz (MAME uses 2 MHz,
+// but Darklite's demo "Tiki Tiki Ta" times its raster effects with a CTC
+// timer and only fits in a frame at 4 MHz; Asbjorn Djupdal's emulator also
+// uses the CPU clock). TRG0 and TRG1 count a 2 MHz clock. Channel 0's output (BAR0) clocks
 // channel 2 and the DART's channel A receiver; channel 2's output (BAR2)
 // clocks channel 3 and the DART's channel A transmitter (the ST jumper, set
 // to BAR2 as in MAME); channel 1 clocks both directions of DART channel B.
@@ -467,7 +470,7 @@ z80ctc ctc
 (
 	.clk(clk),
 	.reset(reset),
-	.ce(ce_2m),
+	.ce(cpu_cen_p),
 	.wr(io_wr_p && io_hit && io_grp == IO_TIMS),
 	.ch_sel(cpu_a[1:0]),
 	.din(cpu_do),

@@ -25,7 +25,7 @@ module z80ctc
 (
 	input        clk,
 	input        reset,
-	input        ce,          // CTC clock (2 MHz on the Tiki 100)
+	input        ce,          // CTC clock (the 4 MHz CPU clock on the Tiki 100)
 
 	// CPU interface. wr is a one-clock pulse; reads have no side effects.
 	input        wr,

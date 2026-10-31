@@ -54,11 +54,15 @@ module tiki100_video
 
 ////////////////////////////////////////////////////////////////////////////////
 // Timing: 1280 dots x 312 lines at 20 MHz = 15.625 kHz, 50.08 Hz.
-// Visible area 1024 x 256 starts at dot 0 of line 0.
+// Visible area 1024 x 256 starts at dot 0 of line 0. The horizontal timing
+// follows fig. 4.3 of the technical handbook (13 us HBLANK, 4.8 us HSYNC
+// starting about 1.6 us into it; 3.6 ms VBLANK). The handbook doesn't say
+// which line VSYNC starts on; line 280 makes the raster effects in Darklite's
+// demo "Tiki Tiki Ta" cover the visible lines.
 
 localparam H_ACTIVE     = 1024;
 localparam H_SYNC_START = 1056;   // 1.6 us front porch
-localparam H_SYNC_END   = 1150;   // 4.7 us sync, 6.5 us back porch
+localparam H_SYNC_END   = 1152;   // 4.8 us sync, 6.4 us back porch
 localparam H_TOTAL      = 1280;
 
 localparam V_ACTIVE     = 256;
@@ -162,9 +166,10 @@ always @(posedge clk) if (ce) begin
 	if (dot == 4'd15) shifter <= {next_hi, next_lo};
 	else              shifter <= {grp[1], shifter[15:1]};
 
-	// At the start of horizontal blanking, if mode bit 7 is set, palette entry
-	// mode[3:0] takes the inverse of the palette register.
-	if (hcount == H_ACTIVE && mode[7]) palette[mode[3:0]] <= ~palette_val;
+	// At the end of horizontal blanking (the MRAMW pulse in the handbook), if
+	// mode bit 7 is set, palette entry mode[3:0] takes the inverse of the
+	// palette register.
+	if (hcount == H_TOTAL - 1 && mode[7]) palette[mode[3:0]] <= ~palette_val;
 
 	// Outputs, one dot after the counters
 	r <= visible ? {color[7:5], color[7:5], color[7:6]} : 8'd0;

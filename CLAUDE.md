@@ -30,19 +30,21 @@ Rename `Template.{qpf,qsf,sdc,srf,sv}` and `Template_Q13.{qpf,qsf,srf}` to `Tiki
 
 MAME's driver is the hardware spec. Current MAME keeps it in `src/mame/tiki/` (`tiki100.cpp`, `tiki100.h`); older trees used `src/mame/drivers/tiki100.cpp` and `src/mame/includes/tiki100.h`. The disk format is in `src/lib/formats/tiki100_dsk.cpp`. Read the source for anything below that's marked "verify". MAME's own TODO list: hard disk, analog/digital I/O, light pen and the 8088 CPU card are not emulated, so they're out of scope for now.
 
+The Kontiki-100 technical handbook (`docs/tiki100_teknisk_handbok.pdf`, a Norwegian scan with OCR text) overrides MAME where they disagree. Don't load the whole PDF: extract it with `pdftotext -layout` and grep (the OCR puts spaces inside words). Known corrections to MAME so far: the CTC's timer mode counts 4 MHz, not 2 MHz (p. 14), and the palette write happens at the end of HBLANK (p. 37).
+
 ### Chips and clocks
 
 | Part | Clock | Notes |
 |---|---|---|
 | Z80 CPU | 4 MHz (8 MHz crystal ÷ 2) | IM2 interrupts via daisy chain |
-| Z80 CTC | 2 MHz | Timers and baud rates |
-| Z80 DART | 2 MHz | Two serial ports |
-| Z80 PIO | 2 MHz | Centronics printer and cassette |
+| Z80 CTC | 4 MHz (CPU clock) | Timers and baud rates. Timer mode counts 4 MHz (handbook p. 14; MAME wrongly uses 2 MHz). TRG0/TRG1 count 2 MHz |
+| Z80 DART | 2 MHz in MAME | Two serial ports. Baud clocks come from the CTC, so its own clock doesn't change behavior |
+| Z80 PIO | 2 MHz in MAME | Centronics printer and cassette. No internal timing, so its own clock doesn't change behavior |
 | AY-3-8912 | 2 MHz | Mono output; I/O port A drives the scroll register |
 | FD1797 (or FD1767) | 1 MHz | Two 5.25" drives; MAME defaults to 80-track double-sided |
 | Video | 20 MHz dot clock (separate crystal) | No CRTC chip; discrete logic |
 
-With `clk_sys` = 40 MHz: dot clock enable = ÷2, CPU = ÷10, peripherals = ÷20, FDC = ÷40. The template's PLL currently outputs 20 MHz; change `output_clock_frequency0` in `rtl/pll/pll_0002.v` to `"40.000000 MHz"` (or ask the owner to regenerate it in the Quartus IP editor).
+With `clk_sys` = 40 MHz: dot clock enable = ÷2, CPU and CTC = ÷10, AY, DART, PIO and CTC TRG0/TRG1 = ÷20, FDC = ÷40. The template's PLL currently outputs 20 MHz; change `output_clock_frequency0` in `rtl/pll/pll_0002.v` to `"40.000000 MHz"` (or ask the owner to regenerate it in the Quartus IP editor).
 
 ### ROMs (MAME romset `tiki100`)
 
@@ -96,7 +98,7 @@ For both the DART (MAME's `cd_ba` addressing) and the PIO (MAME's generic `read`
 
 **Video mode (ports 0C–0F, write):** bits 3–0 = palette index, bits 5–4 = mode, bit 6 unused, bit 7 = write palette entry during horizontal blanking.
 
-**Palette data (ports 14–15, write):** stored **inverted**. Bits 7–5 = red, 4–2 = green, 1–0 = blue. At the end of every scanline, if mode bit 7 is set, palette entry `mode[3:0]` gets the inverted palette value. That's 256 possible colors, 16 entries.
+**Palette data (ports 14–15, write):** stored **inverted**. Bits 7–5 = red, 4–2 = green, 1–0 = blue. At the end of every scanline (the end of HBLANK, handbook p. 37), if mode bit 7 is set, palette entry `mode[3:0]` gets the inverted palette value. That's 256 possible colors, 16 entries.
 
 **Scroll register:** written through AY port A. 8 bits, in units of one line (128 bytes).
 
@@ -110,8 +112,8 @@ For both the DART (MAME's `cd_ba` addressing) and the PIO (MAME's generic `read`
   - In modes 1 and 2 the latch still holds four bits, and software sets up the palette so only the low bits matter. Copy this behavior exactly rather than "cleaning it up".
   - Bit 1 of the column counter is shifted into the top of the shifter (a test pattern normally hidden by the palette).
 - Changes to mode, scroll and video RAM take effect at 16-dot group boundaries on real hardware. MAME only applies them once per line, and only one known demo needs finer timing. Start with per-line, but structure the design so per-group is possible later.
-- MAME doesn't model sync and porch positions. Use standard PAL-like timings until a schematic says otherwise. Wikipedia cites a Norwegian article on the Rev C video circuit ("Videokretsen i TIKI-100 Rev C") that may have details.
-- MAME TODO: some demos expect VSYNC on a PIO pin. Leave a hook for it.
+- Sync timing (handbook fig. 4.3, p. 38): 64 µs line, 13 µs HBLANK, 4.8 µs HSYNC starting about 1.6 µs into HBLANK (dots 1056–1151), VBLANK 3.6 ms (56 lines) + 16.4 ms (256 lines) = 312 lines. The handbook doesn't give VSYNC's line. The core uses line 280, which makes the raster effects in Darklite's demo "Tiki Tiki Ta" cover exactly the visible lines.
+- Printer port sync (OSD option): that demo needs a hardware mod that connects VSYNC to Centronics data line D0 and HSYNC to D1, read through PIO port A in bit mode. Both are active high on the cable: the demo's disk loader treats D0 = 1 as "in VSYNC". The demo needs the 4 MHz CTC to fit its raster sequence into one frame.
 
 ### Interrupts
 
@@ -119,7 +121,7 @@ IM2 daisy chain, highest priority first: CTC, DART, PIO, then the three expansio
 
 ### CTC and serial wiring
 
-- TRG0 and TRG1 are clocked at 2 MHz.
+- TRG0 and TRG1 are clocked at 2 MHz. Timer mode counts the 4 MHz CPU clock.
 - ZC/TO0 (called BAR0) drives CTC TRG2, DART RxCA, and DART TxCA when the ST jumper is 0.
 - ZC/TO1 drives DART RxTxCB.
 - ZC/TO2 (BAR2) drives DART TxCA when ST is 1, and CTC TRG3.
