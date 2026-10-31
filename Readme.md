@@ -228,8 +228,8 @@ the core.
 ## Status
 
 Disk timing: the floppy controller now models a turning disk
-(`plans/disk-timing.md`). Darklite's demo "The Hollow" runs in the
-simulator with the printer port sync option. Its loader reads one sector
+(`plans/disk-timing.md`). Darklite's demo "The Hollow" runs on the MiSTer
+and in the simulator with the printer port sync option. Its loader reads one sector
 per frame and plays music while it waits for each byte; before, it hung
 after about 3 seconds waiting for bytes the controller had dropped. It also
 needed a PIO fix: in bit mode the interrupt now waits for the port to change
