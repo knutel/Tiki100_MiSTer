@@ -119,9 +119,10 @@ and changes the palette from an interrupt that D1 raises on every line
 (the raster bars). Without the cable it hangs on the boot ROM's screen, in
 MAME too.
 
-The OSD's **Printer port sync** option adds the cable. Leave it Off for
-everything else: with it On, the printer's D0 and D1 inputs follow the
-sync signals instead of reading 1. In the simulator, `--printer-sync 1` does
+The OSD's **Printer port sync** option adds the cable. It is On by default.
+With it On, the printer's D0 and D1 inputs follow the sync signals instead
+of reading 1; turn it Off if other software misbehaves when it reads the
+printer port. In the simulator, `--printer-sync 1` does
 the same:
 
     sim/obj/Vsim_top sim/obj/boot.rom sim/obj/boot1.rom --printer-sync 1 \

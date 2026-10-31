@@ -57,7 +57,7 @@ localparam CONF_STR = {
 	"-;",
 	"O[122:121],Aspect ratio,Original,Full Screen,[ARC1],[ARC2];",
 	"O[2:1],Boot ROM,2.03w,1.35,1.30;",
-	"O[3],Printer port sync,Off,On;",
+	"O[4],Printer port sync,On,Off;",
 	"-;",
 	"T[0],Reset;",
 	"R[0],Reset and close OSD;",
@@ -207,8 +207,9 @@ tiki100 tiki100
 	// port A in bit mode with bits 0-1 as inputs, waits for D0 to rise once
 	// per frame and takes an interrupt when D1 falls on every line. Both are
 	// active high: its disk loader treats D0 = 1 as "in VSYNC" and plays the
-	// music then. With the option off the lines read FF.
-	.par_data_in(status[3] ? {6'b111111, HSync, VSync} : 8'hFF),
+	// music then. With the option off the lines read FF. The option is on
+	// by default (status bit 4 = 0; bit 3 held it when it was off by default).
+	.par_data_in(!status[4] ? {6'b111111, HSync, VSync} : 8'hFF),
 	.par_strobe(),
 	.par_ack(1'b1),
 	.par_busy(1'b0),
