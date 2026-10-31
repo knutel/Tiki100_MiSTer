@@ -77,6 +77,7 @@ reg  [1:0] ie, ip, ius, rdy, match, stb_d;
 wire [7:0] pin_in[2];
 assign pin_in[0] = pa_in;
 assign pin_in[1] = pb_in;
+reg  [7:0] bits_d[2];     // mode 3 port value one clock ago: the equation follows changes
 
 wire [1:0] stb = {~bstb_n, ~astb_n};   // strobe active
 
@@ -186,8 +187,16 @@ always @(posedge clk) begin
 				rdy[p] <= 1'b0;
 			end
 
-			// Bit control mode: interrupt when the logic equation becomes true
-			if (mode[p] == MODE_BIT && next_cw[p] == NEXT_ANY) begin
+			// Bit control mode: interrupt when the logic equation becomes true.
+			// Like MAME, the equation is only evaluated when the port's value
+			// (input pins and output bits) changes: after a new mask the
+			// interrupt waits for the next change, even if the equation is
+			// already true. Darklite's "The
+			// Hollow" relies on this: it loads an HSYNC mask and then HALTs
+			// for the interrupt.
+			bits_d[p] <= (pin_in[p] & ior[p]) | (out_r[p] & ~ior[p]);
+			if (mode[p] == MODE_BIT && next_cw[p] == NEXT_ANY &&
+			    ((pin_in[p] & ior[p]) | (out_r[p] & ~ior[p])) != bits_d[p]) begin
 				match[p] <= bit_match(p);
 				if (bit_match(p) && !match[p] && !ius[p]) ip[p] <= 1'b1;
 			end
