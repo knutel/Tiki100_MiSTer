@@ -223,6 +223,16 @@ the core.
 
 ## Status
 
+Darklite's demo "Tiki Tiki Ta" runs to the end on the MiSTer with the
+printer port sync option on. It needed three changes besides the option:
+the CTC's timer mode counts the 4 MHz CPU clock, as the technical handbook
+says (at MAME's 2 MHz the plasma's raster sequence doesn't fit in a frame);
+the palette write happens at the end of HBLANK; and with TIKI ROM 2.03w,
+RAM powers up as 00 instead of FF, because the demo reads a byte it never
+loads (7202) and only carries on if it is 0. Because of the 4 MHz CTC, the
+boot ROM's timer interrupt runs twice as fast as in MAME, so `make trace`
+for 2.03w now matches MAME's trace for the first 912,562 instructions.
+
 Boot ROM selection: TIKI ROMs 1.35 and 1.30 match MAME's traces
 (`make trace BOOTROM=1`: 1,600,000 instructions; `BOOTROM=2`: all 1,011,776
 MAME recorded), and 2.03w still matches. Both older ROMs copy their start-up

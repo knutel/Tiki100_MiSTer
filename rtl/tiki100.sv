@@ -187,16 +187,22 @@ wire       sel_rom1 = prom_q[1];
 wire       sel_vir  = prom_q[2];
 wire       sel_ram  = prom_q[3];
 
-// 64 KB main RAM. It powers up filled with FF, like MAME's. TIKI ROMs 1.35
-// and 1.30 depend on it: they copy their start-up code to RAM one byte
-// short, so the end marker of their I/O setup table is whatever RAM held at
-// power-on, and FF ends the table. Changing the boot ROM is a power cycle on
-// a real machine, so it fills RAM with FF again (65536 clocks, 1.6 ms) while
-// the machine is held in reset. An ordinary reset keeps RAM.
+// 64 KB main RAM. What it holds at power-on depends on the boot ROM:
+// - With TIKI ROM 2.03w it powers up as 00, like in Asbjorn Djupdal's
+//   emulator. Darklite's demo "Tiki Tiki Ta" depends on it: when its sun
+//   part ends, it plays a script from RAM at 7200 that the demo never loads,
+//   and only carries on if the first count (7202) is 0.
+// - With 1.35 and 1.30 it powers up as FF, like MAME's. Those ROMs copy their
+//   start-up code to RAM one byte short, so the end marker of their I/O setup
+//   table is whatever RAM held at power-on, and FF ends the table.
+// Changing the boot ROM is a power cycle on a real machine, so RAM is filled
+// again (65536 clocks, 1.6 ms) while the machine is held in reset. An
+// ordinary reset keeps RAM.
 reg  [7:0] ram[65536];
 reg  [7:0] ram_q;
-// (Two nested loops: Quartus stops a single loop after 5000 iterations.)
-initial for (int hi = 0; hi < 256; hi++) for (int lo = 0; lo < 256; lo++) ram[hi * 256 + lo] = 8'hFF;
+// The core starts with boot ROM 0 (2.03w) selected. (Two nested loops:
+// Quartus stops a single loop after 5000 iterations.)
+initial for (int hi = 0; hi < 256; hi++) for (int lo = 0; lo < 256; lo++) ram[hi * 256 + lo] = 8'h00;
 
 reg  [1:0] ram_rom    = 2'd0;   // the boot ROM RAM was last filled for
 reg        ram_clear  = 1'b0;
@@ -213,7 +219,7 @@ always @(posedge clk) begin
 end
 
 always @(posedge clk) begin
-	if (ram_clear) ram[clear_a] <= 8'hFF;
+	if (ram_clear) ram[clear_a] <= (ram_rom == 2'd0) ? 8'h00 : 8'hFF;
 	else if (mem_wr && sel_ram) ram[cpu_a] <= cpu_do;
 	ram_q <= ram[cpu_a];
 end
