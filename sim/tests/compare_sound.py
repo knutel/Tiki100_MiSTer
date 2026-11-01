@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-or-later
 """Compare the sound test (tests/sound.asm) recorded by MAME and the simulator.
 
 The test plays four segments of equal length with equal pauses, with the

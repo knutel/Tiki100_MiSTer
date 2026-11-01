@@ -1,3 +1,4 @@
+; SPDX-License-Identifier: GPL-2.0-or-later
 ; Tiki 100 keyboard test ROM
 ;
 ; Runs in place of the boot ROM. Scans the keyboard the way the TIKI ROM

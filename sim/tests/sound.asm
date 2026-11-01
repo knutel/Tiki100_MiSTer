@@ -1,3 +1,4 @@
+; SPDX-License-Identifier: GPL-2.0-or-later
 ; Tiki 100 AY-3-8912 test ROM
 ;
 ; Runs in place of the boot ROM. First reads back AY registers and writes the

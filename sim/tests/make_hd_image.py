@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-or-later
 """Build a bootable Tiki 100 hard disk image from the Winchester system floppy.
 
   make_hd_image.py WCSYS.dsk OUT.hdf [--chd OUT.chd] [--rompath DIR]

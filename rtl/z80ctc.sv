@@ -6,6 +6,8 @@
 //  counter (counts edges on its TRG input). Behaviour follows MAME's
 //  z80ctc.cpp. Takes part in the Z80 IM2 daisy chain (see tiki100.sv).
 //
+//  Copyright (C) 2026 Knut Eldhuset
+//
 //  This program is free software; you can redistribute it and/or modify it
 //  under the terms of the GNU General Public License as published by the Free
 //  Software Foundation; either version 2 of the License, or (at your option)

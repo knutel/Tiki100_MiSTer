@@ -420,3 +420,23 @@ first 916,222 instructions of TIKI ROM 2.03w. That covers the RAM and video
 RAM tests, the move to high RAM and the switch to the RAM/VRAM memory map.
 At that point the ROM enables interrupts and MAME takes the first CTC
 interrupt, which came with milestone 3.
+
+## License and credits
+
+The core is free software under the GNU General Public License, version 2 or
+(at your option) any later version; see `LICENSE`. `THIRD_PARTY.md` lists
+the third-party parts with their licenses and notices: the T80 CPU and
+YM2149 sound modules (BSD-style licenses whose notices must accompany the
+`.rbf`), the WD1793 floppy controller and the MiSTer framework (GPL), and
+MAME's floppy drive samples (CC0).
+
+Thanks to:
+
+- MAME's tiki100 driver and device authors (Curt Coder, Frode van der Meeren,
+  Wilbert Pol, Joakim Larsson Edstrom and others): their emulation was the
+  hardware reference for this core.
+- Asbjørn Djupdal, whose Tiki 100 emulator settled several details.
+- Darklite, for the demos and for explaining what they need from the
+  hardware (the wait states).
+- Sorgelig and the MiSTer developers for the framework, and the authors of
+  the T80, YM2149 and WD1793 modules reused from the ZX Spectrum core.

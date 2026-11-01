@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-or-later
 """Extract the Tiki 100 ROMs from a MAME romset zip (tiki100.zip or kontiki.zip).
 
 Files are found by CRC32, so it doesn't matter how the zip is laid out.

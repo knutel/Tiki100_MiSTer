@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
 # Save a MAME snapshot of the Tiki 100 screen after a given number of frames.
 #
 # Usage: mame_snap.sh <rompath> <output.png> <frame> [disk image for drive A]

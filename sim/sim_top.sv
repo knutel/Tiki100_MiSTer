@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 // Simulation wrapper: instantiates the core and exposes the CPU bus
 // so the C++ testbench can trace instruction fetches.
 

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-or-later
 """Run MAME's tiki100 while replaying PS/2 key events.
 
 Usage:

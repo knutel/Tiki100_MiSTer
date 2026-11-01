@@ -5,6 +5,7 @@
 //
 //  Copyright (C) 2007,2008 Viacheslav Slavinsky
 //  Copyright (C) 2016 Sorgelig
+//  Copyright (C) 2026 Knut Eldhuset (changes for the Tiki 100 core)
 //
 //  From MiSTer-devel/ZX-Spectrum_MISTer (commit 1577d50e1b1f), modified for
 //  the Tiki 100 core:

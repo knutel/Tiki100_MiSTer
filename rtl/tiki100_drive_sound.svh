@@ -3,6 +3,8 @@
 //
 // Source: MAME's default 5.25" floppy drive sounds (samples/floppy/ in the
 // MAME source tree), CC0 1.0 Universal according to MAME's samples/README.md.
+//
+// SPDX-License-Identifier: GPL-2.0-or-later
 
 localparam DS_ROM_SIZE = 39186;
 

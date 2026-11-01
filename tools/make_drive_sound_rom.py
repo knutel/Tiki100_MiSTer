@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-or-later
 """Build the drive sound ROM from MAME's 5.25" floppy sound samples.
 
 The samples are MAME's default 5.25" drive sounds (samples/floppy/525_*.wav
@@ -69,7 +70,9 @@ def main():
         f.write("// tiki100_drive_sound.hex, 10-bit signed at %d Hz.\n" % RATE)
         f.write("//\n")
         f.write("// Source: MAME's default 5.25\" floppy drive sounds (samples/floppy/ in the\n")
-        f.write("// MAME source tree), CC0 1.0 Universal according to MAME's samples/README.md.\n\n")
+        f.write("// MAME source tree), CC0 1.0 Universal according to MAME's samples/README.md.\n")
+        f.write("//\n")
+        f.write("// SPDX-License-Identifier: GPL-2.0-or-later\n\n")
         f.write("localparam DS_ROM_SIZE = %d;\n\n" % len(rom))
         for name, file, start, length in table:
             f.write("localparam DS_%-17s = %5d, DS_%s_LEN = %5d;  // %s.wav\n"

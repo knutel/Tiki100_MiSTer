@@ -9,7 +9,9 @@
 //  The latch indexes a 16-entry palette of 8-bit (3-3-2) colors.
 //
 //  Modelled on MAME's tiki100 screen_update(). Sync positions aren't in MAME;
-//  they are PAL-like guesses until a schematic says otherwise.
+//  they come from the technical handbook and its schematics (see Timing).
+//
+//  Copyright (C) 2026 Knut Eldhuset
 //
 //  This program is free software; you can redistribute it and/or modify it
 //  under the terms of the GNU General Public License as published by the Free

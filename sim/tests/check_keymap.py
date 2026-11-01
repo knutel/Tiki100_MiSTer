@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-or-later
 """Check the PS/2 scancode table in rtl/tiki100_keyboard.sv against MAME.
 
 MAME's tiki100 input ports give each Tiki key a PC key (KEYCODE_x). This

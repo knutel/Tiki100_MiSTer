@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-or-later
 """Compare a simulator frame (PPM) with a MAME snapshot (PNG).
 
 Converts the PPM to PNG next to it (same name, .png) so it can be viewed,

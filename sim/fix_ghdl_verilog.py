@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-or-later
 """Clean up GHDL's Verilog output so Verilator accepts it.
 
 GHDL 4.1 (--synth --out=verilog) has two naming bugs that hit T80:

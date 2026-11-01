@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
 # Run a test ROM in MAME in place of the boot ROM and log what it writes to
 # port FF (the result port), one hex byte per line.
 #

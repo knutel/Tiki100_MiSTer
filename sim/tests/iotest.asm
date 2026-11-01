@@ -1,3 +1,4 @@
+; SPDX-License-Identifier: GPL-2.0-or-later
 ; Tiki 100 CTC/DART/PIO test ROM
 ;
 ; Runs in place of the boot ROM, both in MAME and in the simulator, with

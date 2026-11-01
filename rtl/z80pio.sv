@@ -6,6 +6,8 @@
 //  port A only) and 3 (bit control). Behaviour follows MAME's z80pio.cpp.
 //  Takes part in the Z80 IM2 daisy chain (see tiki100.sv).
 //
+//  Copyright (C) 2026 Knut Eldhuset
+//
 //  This program is free software; you can redistribute it and/or modify it
 //  under the terms of the GNU General Public License as published by the Free
 //  Software Foundation; either version 2 of the License, or (at your option)

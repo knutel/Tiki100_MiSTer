@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 // Tiki 100 core testbench.
 //
 // Loads the boot ROM and banking PROM through the core's download port,

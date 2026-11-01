@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
 # Tiki 100 core simulation
 #
 #   make            build the simulator

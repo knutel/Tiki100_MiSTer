@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
 # Record a MAME instruction trace of the Tiki 100 boot.
 #
 # Usage: mame_trace.sh <rompath> <output.log> [seconds] [machine [options]]
