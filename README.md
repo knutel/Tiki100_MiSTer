@@ -1,19 +1,41 @@
 # Tiki100 for MiSTer
 
-An FPGA recreation of the Tiki 100 (Tiki Data, Oslo, 1984), a Z80 home and
-school computer. MAME's `tiki100` driver is used as the hardware reference.
+An FPGA recreation of the Tiki 100 (Tiki Data, Oslo, 1984; first sold as the
+Kontiki 100), a Z80 home and school computer, for the
+[MiSTer](https://github.com/MiSTer-devel/Wiki_MiSTer/wiki) platform. MAME's
+`tiki100` driver and the Kontiki 100 technical handbook are the hardware
+references.
 
-Work in progress. Implemented so far: Z80 CPU (T80), 64 KB RAM, 32 KB video
-RAM, boot ROM, PROM-based memory banking, system latch, I/O decoding, ROM
-loading, video (all three graphics modes, palette, hardware scroll), and the
-Z80 CTC, DART and PIO with mode 2 (daisy chain) interrupts, the keyboard, and
-the FD1797 floppy controller with two drives, and the
-AY-3-8912 sound chip. The serial ports, printer port and cassette aren't
-connected to the MiSTer's I/O yet.
+It runs TIKO (the Tiki's CP/M-compatible operating system) from floppy and
+hard disk images, games, and Darklite's demos "Tiki Tiki Ta" and "The
+Hollow". Implemented: the Z80 CPU with the real machine's wait states, 64 KB
+RAM, 32 KB video RAM, the boot ROM and PROM-based memory banking, video (all
+three graphics modes, palette, hardware scroll), the Z80 CTC, DART and PIO
+with mode 2 interrupts, the keyboard, the FD1797 floppy controller with two
+drives and disk timing, the Winchester hard disk card, the AY-3-8912 sound
+chip, and floppy drive sounds. The serial ports, printer port and cassette
+aren't connected to the MiSTer's I/O yet.
 
 Video is 1024 x 256 at 50 Hz with 15.6 kHz line rate. HDMI works through the
 MiSTer scaler. Analog VGA users get 15 kHz video: the core doesn't scandouble
 to 31 kHz yet.
+
+## Installation
+
+- Copy the newest `releases/Tiki100_YYYYMMDD.rbf` to `_Computer/` on the SD
+  card, or install the drop-in database (below) and let `update` or
+  `update_all` keep it current.
+- Put the ROM files in `games/Tiki100/` (see ROM files). They are not
+  included.
+- Put disk images in `games/Tiki100/` and mount them in the OSD (see Disks).
+  None are included; MAME's `tiki100` software list names the known ones.
+
+**Updates with the drop-in database:** download
+`downloader_knutel_Tiki100_MiSTer_DB.zip` from the `db` branch of
+[knutel/Tiki100_MiSTer_DB](https://github.com/knutel/Tiki100_MiSTer_DB/tree/db),
+unzip the `.ini` file in it to the root of the SD card (`/media/fat/`), and
+run `update` or `update_all`. They then install the core and its updates
+like any other.
 
 ## Keyboard
 
@@ -420,6 +442,17 @@ first 916,222 instructions of TIKI ROM 2.03w. That covers the RAM and video
 RAM tests, the move to high RAM and the switch to the RAM/VRAM memory map.
 At that point the ROM enables interrupts and MAME takes the first CTC
 interrupt, which came with milestone 3.
+
+## Making a release
+
+1. Build `Tiki100.qpf` in Quartus Prime Lite 17.0 and test the result,
+   `output_files/Tiki100.rbf`, on a MiSTer.
+2. Copy it to `releases/Tiki100_YYYYMMDD.rbf` (the build date), remove the
+   previous release from `releases/`, and commit.
+3. In the database repository (`Tiki100_MiSTer_DB`), replace the file in
+   `_Computer/` with the same `Tiki100_YYYYMMDD.rbf` and push. Its GitHub
+   Actions rebuild the database within a few minutes; `update` then installs
+   the new file and removes the old one.
 
 ## License and credits
 

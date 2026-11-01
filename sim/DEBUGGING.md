@@ -7,7 +7,7 @@ Techniques that worked when getting Darklite's demos running (October 2026). The
 - The simulator runs at about 1.3 frames per second (about 1 M clocks per second), so 1,000 frames takes about 13 minutes. Run anything over a few hundred frames in the background, and run independent jobs in parallel (the machine has many cores).
 - Rebuilding `obj/Vsim_top` while a run is in progress is safe: the linker replaces the file, and the running process keeps the old one.
 - MAME runs at 10-15x real time headless, so try it first when the software can run there.
-- Checkpointing the simulator (Verilator `--savable`) was discussed but not built; the owner preferred to wait.
+- Checkpointing the simulator (Verilator `--savable`) was discussed but not built; the maintainer preferred to wait.
 
 ## Simulator
 

@@ -4,7 +4,7 @@ Status: done. Works in simulation and on the MiSTer.
 
 ## Context
 
-The owner wants optional hard disk support, for TIKI ROM 2.03w only. What the research found:
+The maintainer wanted optional hard disk support, for TIKI ROM 2.03w only. What the research found:
 
 - **Hardware.** The handbook's I/O map lists the "Winchester-controller", option 100/005, at ports 20-27. MAME emulates it as `tiki100_hdc` (`src/devices/bus/tiki100/hdc.cpp`, the default card in slot 2): a WD2010 at 5 MHz plus a 1 KB buffer with a 10-bit counter.
   - Port 20 is the buffer. Each access moves the counter on by one.
@@ -24,7 +24,7 @@ The owner wants optional hard disk support, for TIKI ROM 2.03w only. What the re
   - Restore/Seek finish after 15 + 8.33 ms + √steps × rate. Other commands take 1 ms. Read/write finish on buffer handshakes.
   - No drive ready means Aborted Command (`ERR` + `AC`). Scan ID and Format are stubs.
 
-Owner decisions:
+Maintainer decisions:
 - 2.03w only.
 - The card is **present only while a hard disk image is mounted**. Without an image, ports 20-27 read FF as today.
 - If MAME can't bootstrap a bootable hard disk from wcsys, **build the image by hand** with a script.

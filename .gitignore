@@ -58,3 +58,8 @@ sim/obj/
 
 # Reference documents (not redistributed)
 docs/
+
+# Tiki programs and recordings used for testing (not ours to redistribute)
+*.COM
+*.com
+*.mp4

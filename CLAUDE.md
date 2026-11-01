@@ -6,12 +6,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 An FPGA recreation of the Tiki 100 (Tiki Data, Oslo, 1984), a Z80 home and school computer, as a MiSTer core for the DE10-Nano, created from MiSTer-devel/Template_MiSTer.
 
-Milestones 1-6 below are done and run on the owner's MiSTer: CPU, memory, video, CTC/DART/PIO, keyboard, floppy (with disk timing), sound, plus boot ROM selection, disk write-back, the printer port sync mod and the hard disk card. The README's Status section has the details and test results; `plans/` has work in progress and finished plans.
+Milestones 1-6 below are done and run on a MiSTer: CPU, memory, video, CTC/DART/PIO, keyboard, floppy (with disk timing), sound, plus boot ROM selection, disk write-back, the printer port sync mod and the hard disk card. The README's Status section has the details and test results; `plans/` has work in progress and finished plans.
 
-## Working with the owner
+## Working with the maintainer
 
-- The owner is a hobbyist, new to HDL beyond some MyHDL experiments. Explain hardware decisions briefly when you make them.
-- The owner builds in Quartus and tests on the real MiSTer. You can't see the screen, so when a change needs hardware testing, say exactly what to copy to the SD card and what the owner should expect to see.
+- Explain hardware decisions briefly when you make them; the maintainer is not an HDL specialist.
+- The maintainer builds in Quartus and tests on a real MiSTer. You can't see the screen, so when a change needs hardware testing, say exactly what to copy to the SD card and what to expect to see.
 - Prefer simulation over hardware round trips. A full Quartus build takes many minutes.
 
 ## Rules
@@ -23,13 +23,13 @@ Milestones 1-6 below are done and run on the owner's MiSTer: CPU, memory, video,
 - **Never commit ROMs or disk images.** Add `*.rom`, `*.bin` and disk image extensions to `.gitignore`. The core loads ROMs from the SD card at startup.
 - **One clock domain.** `clk_sys` runs at 40 MHz and everything slower uses clock enables, not derived clocks.
 - Reuse existing MiSTer modules where they fit, keep their license headers, and only use GPL-compatible code.
-- **Language:** SystemVerilog/Verilog by default. Ask the owner before writing a module in MyHDL. If MyHDL is used, keep the Python under `myhdl/`, commit the generated Verilog under `rtl/` so the core builds without Python, and document the regeneration command in the README.
+- **Language:** SystemVerilog/Verilog by default. Ask the maintainer before writing a module in MyHDL. If MyHDL is used, keep the Python under `myhdl/`, commit the generated Verilog under `rtl/` so the core builds without Python, and document the regeneration command in the README.
 - Keep commits small, one milestone step at a time.
 
 ## Gotchas
 
 - **Line endings:** `Tiki100.sv`, `files.qip`, `rtl/wd1793.sv` and other template files are CRLF; `.gitignore` mixes CRLF (template lines) and LF (project lines). Python or `sed` rewrites can silently convert a whole file. Check with `file` and keep the existing endings.
-- **The simulator doesn't compile `Tiki100.sv`** (`sim/sim_top.sv` instantiates `rtl/tiki100.sv` directly). Changes to the `emu` glue, CONF_STR or `hps_io` wiring are only checked by the owner's Quartus build, so check widths by hand. All of `hps_io`'s per-drive arrays (`sd_lba`, `sd_blk_cnt`, `sd_buff_din`, ...) must have `VDNUM` elements.
+- **The simulator doesn't compile `Tiki100.sv`** (`sim/sim_top.sv` instantiates `rtl/tiki100.sv` directly). Changes to the `emu` glue, CONF_STR or `hps_io` wiring are only checked by the maintainer's Quartus build, so check widths by hand. All of `hps_io`'s per-drive arrays (`sd_lba`, `sd_blk_cnt`, `sd_buff_din`, ...) must have `VDNUM` elements.
 - **Quartus 17 stops a single loop after 5000 iterations:** nest loops (see the RAM `initial` block in `rtl/tiki100.sv`).
 - **MAME writes to disk images:** give it copies. A compressed CHD is read-only to MAME (writes go to a `diff/` file), so create CHDs with `chdman ... -c none`.
 
@@ -37,7 +37,7 @@ Milestones 1-6 below are done and run on the owner's MiSTer: CPU, memory, video,
 
 MAME's driver is the hardware spec. Current MAME keeps it in `src/mame/tiki/` (`tiki100.cpp`, `tiki100.h`); older trees used `src/mame/drivers/tiki100.cpp` and `src/mame/includes/tiki100.h`. The disk format is in `src/lib/formats/tiki100_dsk.cpp`. Read the source for anything below that's marked "verify". MAME's own TODO list: analog/digital I/O and light pen are not emulated, so they're out of scope for now, as is the 8088 CPU card. MAME master emulates the hard disk card since 2026-09-30 (not in 0.289 or older); the core has it (see Hard disk).
 
-The Kontiki-100 technical handbook (`docs/tiki100_teknisk_handbok.pdf`, a Norwegian scan with OCR text) overrides MAME where they disagree. Don't load the whole PDF: extract it with `pdftotext -layout` and grep (the OCR puts spaces inside words). Known corrections to MAME so far: the CTC's timer mode counts 4 MHz, not 2 MHz (p. 14), and the palette write happens at the end of HBLANK (p. 37).
+The Kontiki-100 technical handbook (`docs/tiki100_teknisk_handbok.pdf`, a Norwegian scan with OCR text; `docs/` is gitignored, so put your own copy there) overrides MAME where they disagree. Don't load the whole PDF: extract it with `pdftotext -layout` and grep (the OCR puts spaces inside words). Known corrections to MAME so far: the CTC's timer mode counts 4 MHz, not 2 MHz (p. 14), and the palette write happens at the end of HBLANK (p. 37).
 
 ### Chips and clocks
 
@@ -208,7 +208,7 @@ Running the simulator directly (options are documented at the top of `sim/sim_ma
 
 `TRACE_FDC=file` logs floppy and hard disk controller accesses. The simulator runs at about 1.3 frames per second, so run long jobs in the background and in parallel. Run the simulator from `sim/`: it reads the drive sound samples from `../rtl/tiki100_drive_sound.hex`. Rebuilding `Vsim_top` while a run is in progress is safe, but don't start several `make` targets at once after an RTL or Makefile change, because they all try to rebuild it.
 
-The FPGA build is done by the owner in Quartus (`Tiki100.qpf`); the result is `output_files/Tiki100.rbf`, and errors are in `output_files/Tiki100.map.rpt`.
+The FPGA build is done by the maintainer in Quartus (`Tiki100.qpf`); the result is `output_files/Tiki100.rbf`, and errors are in `output_files/Tiki100.map.rpt`.
 
 ## MiSTer integration
 
@@ -239,13 +239,13 @@ At core start, Main_MiSTer loads `boot0.rom`…`boot3.rom` from `games/Tiki100/`
 - **Wait states:** MAME has none, so the Makefile's MAME comparisons run with `WAITS=0` by default. With waits on, the boot banner appears later than MAME's frame 100 and `make sound`'s CPU-timed notes are longer.
 - **Known, expected differences from MAME:** `make trace` for ROM 2.03w diverges at instruction 912,562 because the CTC timer counts 4 MHz (handbook) instead of MAME's 2 MHz; `tikodir` compares frame 960 because the core's drive needs 200 ms to be ready after the motor restarts.
 - **Investigating software that misbehaves:** see `sim/DEBUGGING.md` (simulator probes, frame-limited traces, memory dumps, MAME Lua taps and debugger, time budgets). Work in progress is tracked in `plans/`; check there first when starting a session.
-- **Hardware check:** after each change that needs it, tell the owner which `.rbf`, ROM and disk image files to copy, and what should appear.
+- **Hardware check:** after each change that needs it, tell the maintainer which `.rbf`, ROM and disk image files to copy, and what should appear.
 
 ## Milestones
 
 1-6 are done: CPU/memory/banking/I/O decode, video, CTC/PIO/DART with IM2 interrupts, keyboard, floppy, sound. Done from the extras: disk write-back to SD, boot ROM selection in the OSD, the printer port sync mod, floppy disk timing, the hard disk card, drive sounds, wait states, per-16-dot video timing.
 
-A license review of all third-party material (MAME's drive sound samples, the reused MiSTer modules, MAME-derived code) is still to do; the owner wants it done later, as a separate step.
+Licensing: the core is GPL v2 or later. `THIRD_PARTY.md` lists every third-party part with its license and notice; update it when adding or changing one. The T80 and YM2149 notices must accompany every distributed `.rbf`. Never commit ROMs, disk images, the handbook scan or other material we may not redistribute.
 
 Remaining extras: cassette via MiSTer's ADC input, serial and printer ports to MiSTer I/O, optional 31 kHz scandoubled analog VGA output (needs a `CLK_VIDEO` of at least 4× the 20 MHz dot clock for `video_mixer`). Simulate each change before it's tried on hardware.
 
