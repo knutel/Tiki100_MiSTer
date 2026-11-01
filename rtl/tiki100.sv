@@ -20,7 +20,7 @@
 //  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 //============================================================================
 
-module tiki100
+module tiki100 #(parameter DRIVE_SOUND_HEX = "rtl/tiki100_drive_sound.hex")
 (
 	input         clk,          // 40 MHz clk_sys
 	input         reset_in,
@@ -77,8 +77,9 @@ module tiki100
 	output        tape_out,
 	input         tape_in,
 
-	// Sound: the AY-3-8912's three channels mixed, unsigned
-	output  [9:0] audio,
+	// Sound: the AY-3-8912's three channels and the drive sounds mixed, unsigned
+	output [11:0] audio,
+	input         drive_sound,  // floppy motor and step sounds (OSD option)
 
 	// Video, 20 MHz dot clock enable on clk
 	output        ce_pix,
@@ -405,8 +406,8 @@ YM2149 psg
 	.IOB_out()
 );
 
-// Mono: the three channels mixed
-assign audio = {2'b00, ay_a} + {2'b00, ay_b} + {2'b00, ay_c};
+// Mono: the three channels mixed (the drive sounds are added below)
+wire [9:0] ay_mix = {2'b00, ay_a} + {2'b00, ay_b} + {2'b00, ay_c};
 
 ////////////////////////////////////////////////////////////////////////////////
 // Interrupts
@@ -626,6 +627,7 @@ assign tape_out   = pb_out[6];
 // and layout is used.
 
 wire [7:0] fdc_dout_d[2];
+wire [1:0] fdc_step;
 wire       fdc_sel   = io_hit && io_grp == IO_FLOP;
 wire       drive     = syl[1];                    // drive 1 selected (wins over drive 0, as in MAME)
 wire       drive_sel = syl[0] | syl[1];
@@ -684,6 +686,7 @@ generate
 			.drq(),
 			.intrq(),
 			.busy(),
+			.step(fdc_step[d]),
 
 			.wp(readonly[d]),
 			.size_code(dsk_size[d] == 20'd368640 ? 3'd2 : 3'd4),
@@ -713,6 +716,26 @@ generate
 		);
 	end
 endgenerate
+
+// Drive sounds: MAME's recorded floppy drive sounds for the motor and the
+// head steps, added to the AY's output. The AY mix (at most 765) gets two
+// more bits, 0..3060, and the drive sound is -511..511, so with an offset of
+// 512 the sum stays within 0..4095.
+wire signed [9:0] drive_snd;
+
+tiki100_drive_sound #(.HEX(DRIVE_SOUND_HEX)) drive_sounds
+(
+	.clk(clk),
+	.reset(reset),
+	.ce(ce_2m),
+	.enable(drive_sound),
+	.motor(motor),
+	.loaded(|mounted),
+	.step(|fdc_step),
+	.out(drive_snd)
+);
+
+assign audio = {ay_mix, 2'b00} + 12'd512 + {{2{drive_snd[9]}}, drive_snd};
 
 ////////////////////////////////////////////////////////////////////////////////
 // Hard disk

@@ -30,6 +30,7 @@
 //    field. SEEK updates the track register. This replaces the watchdog
 //    that dropped bytes the CPU didn't read within 1 ms.
 //  - Type I status bit 5 is always 1, as on the Kontiki 100.
+//  - A step output pulses once for each step, for the drive sounds.
 //
 //  This program is free software; you can redistribute it and/or modify it
 //  under the terms of the GNU General Public License as published by the Free
@@ -61,6 +62,7 @@ module wd1793 #(parameter RWMODE=0, EDSK=1)
 	output       drq,         // DMA request
 	output       intrq,
 	output       busy,
+	output reg   step,        // one ce period for each step pulse to the drive
 
 	input        wp,          // write protect
 
@@ -400,10 +402,11 @@ always @(posedge clk_sys) begin
 		{s_seekerr, s_crcerr, s_intrq} <= 0;
 		{s_wrfault, s_lostdata} <= 0;
 		s_drq_busy <= 0;
-		{ack, sd_wr, sd_rd, sd_busy} <= 0;
+		{ack, sd_wr, sd_rd, sd_busy, step} <= 0;
 	end else if(ce) begin
 
 		ack <= {ack[4:0], sd_ack};
+		step <= 0;
 		if(ack[5:4] == 'b01) {sd_rd,sd_wr} <= 0;
 		if(ack[5:4] == 'b10) sd_busy <= 0;
 
@@ -692,6 +695,7 @@ always @(posedge clk_sys) begin
 					if(wait_time) wait_time <= wait_time - 1'd1;
 					else if(steps) begin
 						steps <= steps - 1'd1;
+						step <= 1;
 						wait_time <= step_time;
 					end else if(verify) begin
 						wait_time <= SETTLE_TIME;

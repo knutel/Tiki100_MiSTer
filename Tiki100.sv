@@ -59,6 +59,7 @@ localparam CONF_STR = {
 	"O[122:121],Aspect ratio,Original,Full Screen,[ARC1],[ARC2];",
 	"O[2:1],Boot ROM,2.03w,1.35,1.30;",
 	"O[4],Printer port sync,On,Off;",
+	"O[5],Drive sounds,On,Off;",
 	"-;",
 	"T[0],Reset;",
 	"R[0],Reset and close OSD;",
@@ -154,12 +155,13 @@ wire rom_wr  = ioctl_download && ioctl_wr && dl_slot != 2'd1 && ioctl_addr < 27'
 wire prom_wr = ioctl_download && ioctl_wr && dl_slot == 2'd1 && ioctl_addr < 27'h100;
 
 wire [7:0] sys_latch;
-wire [9:0] audio;
+wire [11:0] audio;
 
-// The AY-3-8912 is mono: the same unsigned signal on both channels
+// The AY-3-8912 and the drive sounds are mono: the same unsigned signal on
+// both channels
 assign AUDIO_S   = 0;
-assign AUDIO_L   = {audio, 6'd0};
-assign AUDIO_R   = {audio, 6'd0};
+assign AUDIO_L   = {audio, 4'd0};
+assign AUDIO_R   = {audio, 4'd0};
 assign AUDIO_MIX = 0;
 wire       ce_pix, HSync, VSync, HBlank, VBlank;
 
@@ -219,6 +221,7 @@ tiki100 tiki100
 	.tape_in(1'b0),
 
 	.audio(audio),
+	.drive_sound(!status[5]),            // OSD "Drive sounds", on by default
 
 	.ce_pix(ce_pix),
 	.vga_r(VGA_R),

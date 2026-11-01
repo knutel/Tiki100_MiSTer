@@ -18,6 +18,8 @@
 //   --printer-sync 1    put VSYNC and HSYNC on printer data lines D0 and D1
 //                       (the OSD's Printer port sync option)
 //   --wav FILE          record the sound output (mono, 16 bits, 50 kHz)
+//   --drive-sound 0     turn off the floppy motor and step sounds (the OSD's
+//                       Drive sounds option, on by default)
 //   --disk0 FILE        mount a disk image in drive A (--disk1: drive B).
 //                       Writes change only the copy in memory.
 //   --save0 FILE        at the end, save drive A's image with the writes
@@ -94,6 +96,7 @@ int main(int argc, char **argv)
 	FILE *trace = nullptr, *results = nullptr;
 	bool loopback = false;
 	bool printer_sync = false;
+	bool drive_sound = true;
 	std::vector<unsigned char> disk[3];      // drive A, drive B, hard disk
 	std::vector<unsigned char> boot[3];
 	boot[0] = rom;
@@ -125,6 +128,7 @@ int main(int argc, char **argv)
 		else if (a == "--results")      { results = fopen(v, "w"); if (!results) { perror(v); return 1; } }
 		else if (a == "--loopback")     loopback = atoi(v) != 0;
 		else if (a == "--printer-sync") printer_sync = atoi(v) != 0;
+		else if (a == "--drive-sound")  drive_sound = atoi(v) != 0;
 		else if (a == "--disk0")        disk[0] = load(v);
 		else if (a == "--wav")          { wav = fopen(v, "wb"); if (!wav) { perror(v); return 1; } fseek(wav, 44, SEEK_SET); }
 		else if (a == "--disk1")        disk[1] = load(v);
@@ -159,6 +163,7 @@ int main(int argc, char **argv)
 	Vsim_top *top = new Vsim_top;
 	top->loopback = loopback;
 	top->printer_sync = printer_sync;
+	top->drive_sound = drive_sound;
 
 	auto tick = [&]() {
 		top->clk = 0; top->eval();
@@ -270,7 +275,7 @@ int main(int argc, char **argv)
 		// Sound: one sample every 800 clocks (50 kHz), the 10-bit unsigned
 		// mix scaled to signed 16 bits
 		if (wav && cycles % 800 == 0) {
-			int16_t v = (int16_t)(top->audio * 64 - 32768);
+			int16_t v = (int16_t)(top->audio * 16 - 32768);
 			fwrite(&v, 2, 1, wav);
 			wav_samples++;
 		}

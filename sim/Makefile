@@ -49,7 +49,7 @@ T80_SRC = $(T80)/T80_Pack.vhd $(T80)/T80_ALU.vhd $(T80)/T80_MCode.vhd \
           $(T80)/T80_Reg.vhd $(T80)/T80.vhd $(T80)/T80pa.vhd
 GHDL_FLAGS = --std=93c -fexplicit -fsynopsys --workdir=$(OBJ)
 
-RTL = sim_top.sv ../rtl/tiki100.sv ../rtl/tiki100_video.sv ../rtl/tiki100_keyboard.sv ../rtl/tiki100_hdc.sv ../rtl/wd1793.sv $(OBJ)/ym2149.sv ../rtl/z80ctc.sv \
+RTL = sim_top.sv ../rtl/tiki100.sv ../rtl/tiki100_video.sv ../rtl/tiki100_keyboard.sv ../rtl/tiki100_hdc.sv ../rtl/tiki100_drive_sound.sv ../rtl/wd1793.sv $(OBJ)/ym2149.sv ../rtl/z80ctc.sv \
       ../rtl/z80dart.sv ../rtl/z80pio.sv
 
 .PHONY: all trace frame iotest kbdtest sound tiko tikodir hdboot hdwrite roms clean
@@ -72,9 +72,11 @@ $(OBJ)/ym2149.sv: ../rtl/ym2149.sv Makefile
 	mkdir -p $(OBJ)
 	sed 's/^wire \[7:0\] volTable\[64\] = /localparam bit [7:0] volTable[64] = /' $< > $@
 
-$(OBJ)/Vsim_top: $(RTL) $(OBJ)/T80pa.v sim_main.cpp
+# The drive sound samples (tiki100_drive_sound.hex) are read at run time
+# from ../rtl, so the simulator must run in sim/.
+$(OBJ)/Vsim_top: $(RTL) ../rtl/tiki100_drive_sound.svh $(OBJ)/T80pa.v sim_main.cpp
 	verilator --cc --exe --build -j 0 -O3 --top-module sim_top \
-		-Wno-fatal -Wno-lint -Wno-style -Wno-MULTIDRIVEN +1364-2005ext+v \
+		-Wno-fatal -Wno-lint -Wno-style -Wno-MULTIDRIVEN +1364-2005ext+v -I$(abspath ../rtl) \
 		--Mdir $(OBJ)/verilated -o ../Vsim_top \
 		$(abspath $(RTL) $(OBJ)/T80pa.v sim_main.cpp)
 

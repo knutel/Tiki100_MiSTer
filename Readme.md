@@ -164,6 +164,30 @@ somewhat, because MAME models the chip's output resistors and ym2149.sv uses
 a volume table. Unused register bits read back as 0 like on a real AY-3-8910
 (MAME returns all 8 bits for the 8912).
 
+**Drive sounds** (OSD option, On by default): the floppy drives' spindle
+motor runs while the motor is on (system latch bit 6), and the head steps
+and seeks. `rtl/tiki100_drive_sound.sv` plays recorded drive sounds for
+both and adds them to the AY's output, following MAME's floppy sound player
+(`src/devices/sound/drivesound.cpp`): start, run and stop sounds for the
+spindle (empty or loaded, depending on whether a disk image is mounted), a
+step sound, and seek loops for 6, 12 and 20 ms step rates. The simulator's
+`--drive-sound 0` turns them off.
+
+The recordings are MAME's default 5.25" floppy drive samples, the
+`525_*.wav` files in `samples/floppy/` of the MAME source tree (Debian's
+`mame-data` package installs them in `/usr/share/games/mame/samples/floppy`;
+they were taken from MAME 0.264 and are the same in MAME master in
+November 2026). MAME's `samples/README.md` puts them under CC0 1.0
+Universal. They are built into the bitstream, so nothing extra goes on the
+SD card: `tools/make_drive_sound_rom.py` resamples them to 25 kHz, 10-bit
+signed, and writes `rtl/tiki100_drive_sound.hex` (the samples, read with
+`$readmemh`) and `rtl/tiki100_drive_sound.svh` (where each one starts). To
+regenerate them (needs numpy and scipy):
+
+    python3 tools/make_drive_sound_rom.py [path/to/samples/floppy]
+
+Synthesized sounds were tried first; they didn't sound like a real drive.
+
 ## Simulation
 
 Needs `make`, `verilator`, `ghdl`, `python3`, `z80asm` for the test ROM, and
@@ -271,6 +295,11 @@ in its expansion slots. `sim/mame_trace.sh` empties the slots so MAME matches
 the core.
 
 ## Status
+
+Drive sounds: the floppy drives' motor and head sounds play MAME's
+recorded 5.25" drive samples (see Sound) and work on the MiSTer. TIKO's
+boot still matches MAME (`make tiko`), and `make sound` still matches with
+the core's audio output widened to 12 bits for the 10-bit samples.
 
 Hard disk: the Winchester controller card works in the simulator. TIKO 4.01
 boots from a hard disk image made from the Winchester system floppy, the
