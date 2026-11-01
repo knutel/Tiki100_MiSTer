@@ -39,6 +39,7 @@ TIKO_KEYS ?=
 BOOTROM ?= 0
 HD_FLOPPY ?= ../disk_images/wcsys.dsk
 HD_FRAME ?= 1000
+WAITS ?= 0
 MAME_MACHINE = $(if $(filter 1,$(BOOTROM)),tiki100 -bios v135,$(if $(filter 2,$(BOOTROM)),kontiki,tiki100))
 TRACE_SUFFIX = $(if $(filter 0,$(BOOTROM)),,_rom$(BOOTROM))
 BOOTROM_ARGS = $(if $(filter 0,$(BOOTROM)),,--boot2 $(OBJ)/boot2.rom --boot3 $(OBJ)/boot3.rom --bootrom $(BOOTROM))
@@ -87,7 +88,7 @@ $(OBJ)/boot.rom: $(ROMSET)
 	python3 -I extract_roms.py $(ROMSET) $(OBJ)
 
 $(OBJ)/sim_trace$(TRACE_SUFFIX).txt: $(OBJ)/Vsim_top $(OBJ)/boot.rom
-	$(OBJ)/Vsim_top $(OBJ)/boot.rom $(OBJ)/boot1.rom $(BOOTROM_ARGS) --trace $@ --instructions $(INSTRUCTIONS)
+	$(OBJ)/Vsim_top $(OBJ)/boot.rom $(OBJ)/boot1.rom --waits $(WAITS) $(BOOTROM_ARGS) --trace $@ --instructions $(INSTRUCTIONS)
 
 $(OBJ)/mame_trace$(TRACE_SUFFIX).log: $(ROMSET)
 	mkdir -p $(OBJ)
@@ -97,7 +98,7 @@ trace: $(OBJ)/sim_trace$(TRACE_SUFFIX).txt $(OBJ)/mame_trace$(TRACE_SUFFIX).log
 	python3 -I compare_trace.py $(OBJ)/mame_trace$(TRACE_SUFFIX).log $(OBJ)/sim_trace$(TRACE_SUFFIX).txt
 
 frame: $(OBJ)/Vsim_top $(OBJ)/boot.rom $(OBJ)/mame_frame_$(FRAME).png
-	$(OBJ)/Vsim_top $(OBJ)/boot.rom $(OBJ)/boot1.rom --frames $$(($(FRAME) + 1)) --dump $(FRAME) --outdir $(OBJ)
+	$(OBJ)/Vsim_top $(OBJ)/boot.rom $(OBJ)/boot1.rom --waits $(WAITS) --frames $$(($(FRAME) + 1)) --dump $(FRAME) --outdir $(OBJ)
 	python3 -I compare_frame.py $(OBJ)/mame_frame_$(FRAME).png $(OBJ)/frame_$$(printf %04d $(FRAME)).ppm $(OBJ)/diff_$(FRAME).png
 
 $(OBJ)/mame_frame_%.png: $(ROMSET)
@@ -109,7 +110,7 @@ $(OBJ)/iotest.rom: tests/iotest.asm
 	z80asm -o $@ $<
 
 iotest: $(OBJ)/Vsim_top $(OBJ)/boot.rom $(OBJ)/iotest.rom
-	$(OBJ)/Vsim_top $(OBJ)/iotest.rom $(OBJ)/boot1.rom --frames 20 --loopback 1 --results $(OBJ)/iotest_sim.txt
+	$(OBJ)/Vsim_top $(OBJ)/iotest.rom $(OBJ)/boot1.rom --waits $(WAITS) --frames 20 --loopback 1 --results $(OBJ)/iotest_sim.txt
 	sh tests/mame_results.sh $(OBJ)/iotest.rom $(OBJ)/boot1.rom $(OBJ)/iotest_mame.txt 1
 	diff $(OBJ)/iotest_mame.txt $(OBJ)/iotest_sim.txt
 	@echo "iotest: $$(wc -l < $(OBJ)/iotest_sim.txt) results, all match MAME"
@@ -119,7 +120,7 @@ $(OBJ)/kbdtest.rom: tests/kbdtest.asm
 	z80asm -o $@ $<
 
 kbdtest: $(OBJ)/Vsim_top $(OBJ)/boot.rom $(OBJ)/kbdtest.rom
-	$(OBJ)/Vsim_top $(OBJ)/kbdtest.rom $(OBJ)/boot1.rom --frames 80 --keys tests/keys_kbdtest.txt --results $(OBJ)/kbdtest_sim.txt
+	$(OBJ)/Vsim_top $(OBJ)/kbdtest.rom $(OBJ)/boot1.rom --waits $(WAITS) --frames 80 --keys tests/keys_kbdtest.txt --results $(OBJ)/kbdtest_sim.txt
 	python3 -I tests/mame_keys.py .. tests/keys_kbdtest.txt 80 --results $(OBJ)/kbdtest_mame.txt --rom $(OBJ)/kbdtest.rom --prom $(OBJ)/boot1.rom
 	diff $(OBJ)/kbdtest_mame.txt $(OBJ)/kbdtest_sim.txt
 	@echo "kbdtest: $$(grep -c A5 $(OBJ)/kbdtest_sim.txt) key matrix states, all match MAME"
@@ -129,7 +130,7 @@ $(OBJ)/sound.rom: tests/sound.asm
 	z80asm -o $@ $<
 
 sound: $(OBJ)/Vsim_top $(OBJ)/boot.rom $(OBJ)/sound.rom
-	$(OBJ)/Vsim_top $(OBJ)/sound.rom $(OBJ)/boot1.rom --frames 100 --results $(OBJ)/sound_sim.txt --wav $(OBJ)/sound_sim.wav
+	$(OBJ)/Vsim_top $(OBJ)/sound.rom $(OBJ)/boot1.rom --waits $(WAITS) --frames 100 --results $(OBJ)/sound_sim.txt --wav $(OBJ)/sound_sim.wav
 	sh tests/mame_results.sh $(OBJ)/sound.rom $(OBJ)/boot1.rom $(OBJ)/sound_mame.txt 2 $(abspath $(OBJ)/sound_mame.wav)
 	diff $(OBJ)/sound_mame.txt $(OBJ)/sound_sim.txt
 	@echo "sound: register read-back matches MAME"
@@ -141,7 +142,7 @@ $(OBJ)/%.dsk: ../%.zip
 	python3 -I -c "import sys, zipfile; zipfile.ZipFile(sys.argv[1]).extract(sys.argv[2], sys.argv[3])" $< $*.dsk $(OBJ)
 
 tiko: $(OBJ)/Vsim_top $(OBJ)/boot.rom $(DISK)
-	$(OBJ)/Vsim_top $(OBJ)/boot.rom $(OBJ)/boot1.rom --disk0 $(DISK) --frames $$(($(TIKO_FRAME) + 1)) --dump $(TIKO_FRAME) --outdir $(OBJ) \
+	$(OBJ)/Vsim_top $(OBJ)/boot.rom $(OBJ)/boot1.rom --waits $(WAITS) --disk0 $(DISK) --frames $$(($(TIKO_FRAME) + 1)) --dump $(TIKO_FRAME) --outdir $(OBJ) \
 		$(if $(TIKO_KEYS),--keys $(TIKO_KEYS))
 	$(if $(TIKO_KEYS),python3 -I tests/mame_keys.py .. $(TIKO_KEYS) $(TIKO_FRAME) --snapshot $(OBJ)/mame_tiko_$(TIKO_FRAME).png --disk $(DISK),sh mame_snap.sh .. $(OBJ)/mame_tiko_$(TIKO_FRAME).png $(TIKO_FRAME) $(DISK))
 	python3 -I compare_frame.py --allow 16 $(OBJ)/mame_tiko_$(TIKO_FRAME).png $(OBJ)/frame_$$(printf %04d $(TIKO_FRAME)).ppm $(OBJ)/diff_tiko_$(TIKO_FRAME).png
@@ -156,13 +157,13 @@ $(OBJ)/wcsys-hd.hdf: tests/make_hd_image.py $(HD_FLOPPY)
 	python3 -I tests/make_hd_image.py $(HD_FLOPPY) $@ --chd $(OBJ)/wcsys-hd.chd --rompath ..
 
 hdboot: $(OBJ)/Vsim_top $(OBJ)/boot.rom $(OBJ)/wcsys-hd.hdf
-	$(OBJ)/Vsim_top $(OBJ)/boot.rom $(OBJ)/boot1.rom --hdd $(OBJ)/wcsys-hd.hdf --keys tests/keys_tiko_dir.txt \
+	$(OBJ)/Vsim_top $(OBJ)/boot.rom $(OBJ)/boot1.rom --waits $(WAITS) --hdd $(OBJ)/wcsys-hd.hdf --keys tests/keys_tiko_dir.txt \
 		--frames $$(($(HD_FRAME) + 1)) --dump $(HD_FRAME) --outdir $(OBJ)
 	python3 -I tests/mame_keys.py .. tests/keys_tiko_dir.txt $(HD_FRAME) --snapshot $(OBJ)/mame_hd_$(HD_FRAME).png --hd $(OBJ)/wcsys-hd.chd
 	python3 -I compare_frame.py --allow 16 $(OBJ)/mame_hd_$(HD_FRAME).png $(OBJ)/frame_$$(printf %04d $(HD_FRAME)).ppm $(OBJ)/diff_hd_$(HD_FRAME).png
 
 hdwrite: $(OBJ)/Vsim_top $(OBJ)/boot.rom $(OBJ)/wcsys-hd.hdf
-	$(OBJ)/Vsim_top $(OBJ)/boot.rom $(OBJ)/boot1.rom --hdd $(OBJ)/wcsys-hd.hdf --savehdd $(OBJ)/hdwrite_sim.hdf \
+	$(OBJ)/Vsim_top $(OBJ)/boot.rom $(OBJ)/boot1.rom --waits $(WAITS) --hdd $(OBJ)/wcsys-hd.hdf --savehdd $(OBJ)/hdwrite_sim.hdf \
 		--keys tests/keys_hd_install.txt --frames 2700
 	python3 -I tests/mame_keys.py .. tests/keys_hd_install.txt 2700 --snapshot $(OBJ)/mame_hdwrite.png \
 		--hd $(OBJ)/wcsys-hd.chd --hd-out $(OBJ)/hdwrite_mame.chd

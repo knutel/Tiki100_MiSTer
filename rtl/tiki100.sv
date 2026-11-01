@@ -80,6 +80,7 @@ module tiki100 #(parameter DRIVE_SOUND_HEX = "rtl/tiki100_drive_sound.hex")
 	// Sound: the AY-3-8912's three channels and the drive sounds mixed, unsigned
 	output [11:0] audio,
 	input         drive_sound,  // floppy motor and step sounds (OSD option)
+	input         cpu_waits,    // M1 and video RAM wait states (OSD option; the real machine has them)
 
 	// Video, 20 MHz dot clock enable on clk
 	output        ce_pix,
@@ -122,6 +123,7 @@ wire  [7:0] cpu_do;
 wire  [7:0] cpu_di;
 wire        cpu_m1_n, cpu_mreq_n, cpu_iorq_n, cpu_rd_n, cpu_wr_n, cpu_rfsh_n, cpu_halt_n;
 wire        cpu_int;    // from the interrupt daisy chain
+wire        cpu_wait_n; // see Wait states
 
 T80pa cpu
 (
@@ -129,7 +131,7 @@ T80pa cpu
 	.CLK(clk),
 	.CEN_p(cpu_cen_p),
 	.CEN_n(cpu_cen_n),
-	.WAIT_n(1'b1),
+	.WAIT_n(cpu_wait_n),
 	.INT_n(~cpu_int),
 	.NMI_n(1'b1),
 	.BUSRQ_n(1'b1),
@@ -242,6 +244,64 @@ end
 wire [14:0] vid_addr;
 reg   [7:0] vid_data;
 always @(posedge clk) vid_data <= vram[vid_addr];
+
+////////////////////////////////////////////////////////////////////////////////
+// Wait states
+//
+// The Tiki 100 stretches two kinds of memory cycle (handbook chapter 2 next
+// to the address map, section 4.3 and fig. 4.3; schematics 25085-1, U39, and
+// 25085-4, "processor interface"). Demos depend on both, according to their
+// author: Darklite's "The Hollow" syncs its loops to the raster with video
+// RAM accesses. MAME has neither.
+//
+// - Every M1 cycle gets one wait state, to give the RAM more time.
+// - The video RAM is shared with the video logic in 400 ns turns (SWCLK, see
+//   rtl/tiki100_video.sv). A CPU access waits until a whole CPU turn has
+//   passed while it was active: 2 to 5 wait states for a read, 2 to 4 for a
+//   write, depending on where in SWCLK's 800 ns period it starts.
+//
+// The flip-flops are modelled gate by gate. Their asynchronous preset and
+// clear inputs act one clk_sys (25 ns) late, well inside a CPU half-cycle.
+
+wire swclk;     // from the video logic
+reg  swclk_d;
+always @(posedge clk) swclk_d <= swclk;
+
+// U126/U116: the PROM's VIR output (enabled by MREQ) and RD or WR. VIWT
+// (U125) holds the CPU from the moment it addresses video RAM.
+wire vir_acc = ~cpu_mreq_n & sel_vir;
+wire vir_req = vir_acc & (~cpu_rd_n | ~cpu_wr_n);
+
+// U127 (74LS73, J-K, falling edge, cleared while there's no request):
+// A sets when SWCLK falls (the CPU's turn begins), B when SWCLK rises after
+// that (the turn has been used). A clears again on the next fall.
+reg u127a = 1'b0, u127b = 1'b0;
+always @(posedge clk) begin
+	if (!vir_req) begin
+		u127a <= 1'b0;
+		u127b <= 1'b0;
+	end else begin
+		if (swclk_d & ~swclk) u127a <= ~u127b;           // J = /QB, K = QB
+		if (~swclk_d & swclk) u127b <= u127b | u127a;    // J = QA,  K = 0
+	end
+end
+wire viwt_n = u127b | ~vir_acc | ~cpu_waits;
+
+// U39 (74LS74 pair on the CPU clock): A samples M1 and drives WAIT, B
+// presets A one clock later, which makes one wait state per M1. VIWT clears
+// A (and presets B), holding WAIT until the CPU clock edge after it ends.
+reg u39a = 1'b1, u39b = 1'b1;
+always @(posedge clk) begin
+	if (!viwt_n) begin
+		u39a <= 1'b0;
+		u39b <= 1'b1;
+	end else begin
+		if (!u39b)          u39a <= 1'b1;
+		else if (cpu_cen_p) u39a <= cpu_m1_n | ~cpu_waits;
+		if (cpu_cen_p)      u39b <= u39a;
+	end
+end
+assign cpu_wait_n = u39a;
 
 // 8 KB boot ROM in a 16 KB window; the upper 8 KB (an empty socket) reads FF.
 // ROM1 always addresses that upper half.
@@ -801,7 +861,8 @@ tiki100_video video
 	.hsync(hsync),
 	.vsync(vsync),
 	.hblank(hblank),
-	.vblank(vblank)
+	.vblank(vblank),
+	.swclk(swclk)
 );
 
 ////////////////////////////////////////////////////////////////////////////////

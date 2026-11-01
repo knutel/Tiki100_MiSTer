@@ -20,6 +20,8 @@
 //   --wav FILE          record the sound output (mono, 16 bits, 50 kHz)
 //   --drive-sound 0     turn off the floppy motor and step sounds (the OSD's
 //                       Drive sounds option, on by default)
+//   --waits 0           turn off the M1 and video RAM wait states (the OSD's
+//                       Wait states option, on by default; MAME has none)
 //   --disk0 FILE        mount a disk image in drive A (--disk1: drive B).
 //                       Writes change only the copy in memory.
 //   --save0 FILE        at the end, save drive A's image with the writes
@@ -45,7 +47,8 @@
 //
 // Debug switches (environment variables):
 //   TRACE_BYTES=1  print the first 20 opcode fetches with the byte read
-//   TRACE_BUS=1    print the CPU bus for the first 60 clocks after reset
+//   TRACE_BUS=S:N  print the CPU bus for N clocks from clock S (TRACE_BUS=1:
+//                  the first 60 clocks)
 //   TRACE_LATCH=1  print every system latch change
 //   TRACE_FDC=FILE log floppy controller (ports 10-13, except data reads)
 //                  and hard disk controller (ports 21-27) accesses
@@ -97,6 +100,7 @@ int main(int argc, char **argv)
 	bool loopback = false;
 	bool printer_sync = false;
 	bool drive_sound = true;
+	bool cpu_waits = true;
 	std::vector<unsigned char> disk[3];      // drive A, drive B, hard disk
 	std::vector<unsigned char> boot[3];
 	boot[0] = rom;
@@ -129,6 +133,7 @@ int main(int argc, char **argv)
 		else if (a == "--loopback")     loopback = atoi(v) != 0;
 		else if (a == "--printer-sync") printer_sync = atoi(v) != 0;
 		else if (a == "--drive-sound")  drive_sound = atoi(v) != 0;
+		else if (a == "--waits")        cpu_waits = atoi(v) != 0;
 		else if (a == "--disk0")        disk[0] = load(v);
 		else if (a == "--wav")          { wav = fopen(v, "wb"); if (!wav) { perror(v); return 1; } fseek(wav, 44, SEEK_SET); }
 		else if (a == "--disk1")        disk[1] = load(v);
@@ -164,6 +169,7 @@ int main(int argc, char **argv)
 	top->loopback = loopback;
 	top->printer_sync = printer_sync;
 	top->drive_sound = drive_sound;
+	top->cpu_waits = cpu_waits;
 
 	auto tick = [&]() {
 		top->clk = 0; top->eval();
@@ -266,6 +272,12 @@ int main(int argc, char **argv)
 	bool last_hblank = true, last_vblank = true, last_vsync = false;
 	unsigned long long last_vsync_clk = 0;
 
+	unsigned long long bus_from = 0, bus_n = 0;
+	if (getenv("TRACE_BUS")) {
+		bus_n = 60;
+		sscanf(getenv("TRACE_BUS"), "%llu:%llu", &bus_from, &bus_n);
+	}
+
 	unsigned long long cycles = 0;
 	for (;;) {
 		tick();
@@ -280,9 +292,9 @@ int main(int argc, char **argv)
 			wav_samples++;
 		}
 
-		if (getenv("TRACE_BUS") && cycles < 60)
-			fprintf(stderr, "clk %3llu  A=%04X m1=%d mreq=%d rd=%d di=%02X\n", cycles,
-			        top->addr, top->m1_n, top->mreq_n, top->rd_n, top->din);
+		if (cycles >= bus_from && cycles < bus_from + bus_n)
+			fprintf(stderr, "clk %3llu  A=%04X m1=%d mreq=%d rd=%d wr=%d rfsh=%d wait=%d di=%02X do=%02X\n", cycles,
+			        top->addr, top->m1_n, top->mreq_n, top->rd_n, top->wr_n, top->rfsh_n, top->wait_n, top->din, top->dout);
 
 		bool fetch = !top->m1_n && !top->mreq_n && !top->rd_n;
 		if (fetch) {

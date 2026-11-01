@@ -49,7 +49,9 @@ module tiki100_video
 	output reg        hsync,
 	output reg        vsync,
 	output reg        hblank,
-	output reg        vblank
+	output reg        vblank,
+
+	output            swclk         // video RAM phase: 1 = video fetch, 0 = CPU slot
 );
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -80,6 +82,13 @@ wire [3:0] dot = hcount[3:0];         // dot within the 16-dot group
 wire [6:0] grp = hcount[10:4];        // group within the line, 0-79
 wire       last_grp  = (grp == H_TOTAL/16 - 1);
 wire       last_line = (vcount == V_TOTAL - 1);
+
+// SWCLK (handbook fig. 4.3) is the dot clock divided by 16. The video RAM
+// alternates between the video logic, which fetches the next group's word
+// while SWCLK is high (dots 8-15, ending with the shifter load), and the CPU,
+// which gets it while SWCLK is low (dots 0-7). We read the block RAM at other
+// dots, but the CPU's wait states follow SWCLK (see rtl/tiki100.sv).
+assign swclk = hcount[3];
 
 always @(posedge clk) if (ce) begin
 	if (hcount == H_TOTAL - 1) begin

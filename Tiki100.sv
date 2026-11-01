@@ -60,6 +60,7 @@ localparam CONF_STR = {
 	"O[2:1],Boot ROM,2.03w,1.35,1.30;",
 	"O[4],Printer port sync,On,Off;",
 	"O[5],Drive sounds,On,Off;",
+	"O[6],Wait states,On,Off;",
 	"-;",
 	"T[0],Reset;",
 	"R[0],Reset and close OSD;",
@@ -222,6 +223,7 @@ tiki100 tiki100
 
 	.audio(audio),
 	.drive_sound(!status[5]),            // OSD "Drive sounds", on by default
+	.cpu_waits(!status[6]),              // OSD "Wait states", on by default
 
 	.ce_pix(ce_pix),
 	.vga_r(VGA_R),

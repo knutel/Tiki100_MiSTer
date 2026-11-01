@@ -155,6 +155,27 @@ the same:
 We don't know where the real Tiki 100's VSYNC sits relative to the visible
 lines, so raster effects that count lines from VSYNC may be a few lines off.
 
+## Wait states
+
+The real Tiki 100 slows the CPU down in two ways, and Darklite's demos
+depend on both (their author pointed this out; the technical handbook's
+schematics confirm it). MAME has neither.
+
+- Every M1 cycle (instruction fetch) gets one extra clock (U39 on the CPU
+  board), so a NOP takes 5 cycles instead of 4.
+- The video RAM is shared with the video logic in 400 ns turns (SWCLK, the
+  dot clock divided by 16): the video logic fetches the next 16 dots while
+  SWCLK is high, and the CPU gets the memory while it's low. A CPU access to
+  video RAM waits until a whole CPU turn has passed while it was active
+  (U127 on the video board): 2 to 5 wait states for a read and 2 to 4 for a
+  write. A loop that touches video RAM therefore locks to the 16-dot grid,
+  which is how "The Hollow" syncs its loops to the raster.
+
+The core models both gate by gate (`rtl/tiki100.sv`, Wait states). The OSD's
+**Wait states** option (On by default) turns them off for comparison. In the
+simulator `--waits 0` does the same. The `make` targets that compare with
+MAME run without them (`WAITS=0`), since MAME has none.
+
 ## Sound
 
 The AY-3-8912 is `rtl/ym2149.sv` from the ZX Spectrum core, at 2 MHz with the
@@ -189,6 +210,9 @@ regenerate them (needs numpy and scipy):
 Synthesized sounds were tried first; they didn't sound like a real drive.
 
 ## Simulation
+
+The comparisons with MAME run the core without wait states (see Wait
+states); add `WAITS=1` to run them with.
 
 Needs `make`, `verilator`, `ghdl`, `python3`, `z80asm` for the test ROM, and
 `mame` for the reference runs:

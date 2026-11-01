@@ -15,6 +15,7 @@ module sim_top
 	input         loopback,     // connect each DART channel's TxD to its RxD
 	input         printer_sync, // VSYNC and HSYNC on printer data lines D0 and D1 (OSD option)
 	input         drive_sound,  // floppy motor and step sounds (OSD option)
+	input         cpu_waits,    // M1 and video RAM wait states (OSD option)
 	input  [10:0] ps2_key,
 
 	// Disk images (hps_io's SD interface, flattened for the C++ testbench)
@@ -42,6 +43,8 @@ module sim_top
 	output  [7:0] dout,
 	output        iorq_n,
 	output        wr_n,
+	output        rfsh_n,
+	output        wait_n,
 	output  [7:0] sys_latch,
 
 	output [11:0] audio,
@@ -105,6 +108,7 @@ tiki100 #(.DRIVE_SOUND_HEX("../rtl/tiki100_drive_sound.hex")) core   // the simu
 	.tape_in(1'b0),
 	.audio(audio),
 	.drive_sound(drive_sound),
+	.cpu_waits(cpu_waits),
 	.ce_pix(ce_pix),
 	.vga_r(vga_r),
 	.vga_g(vga_g),
@@ -123,5 +127,7 @@ assign din    = core.cpu_di;
 assign dout   = core.cpu_do;
 assign iorq_n = core.cpu_iorq_n;
 assign wr_n   = core.cpu_wr_n;
+assign rfsh_n = core.cpu_rfsh_n;
+assign wait_n = core.cpu_wait_n;
 
 endmodule
