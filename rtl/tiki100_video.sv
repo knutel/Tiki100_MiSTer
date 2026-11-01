@@ -30,7 +30,9 @@ module tiki100_video
 #(
 	// 0: mode and scroll changes take effect once per line (like MAME).
 	// 1: they take effect at every 16-dot group (like the real hardware).
-	parameter PER_GROUP = 0
+	//    Tiki Tiki Ta's plasma needs it: its line interrupt writes the scroll
+	//    register early in the line, for that same line.
+	parameter PER_GROUP = 1
 )
 (
 	input             clk,          // 40 MHz clk_sys
@@ -58,9 +60,15 @@ module tiki100_video
 // Timing: 1280 dots x 312 lines at 20 MHz = 15.625 kHz, 50.08 Hz.
 // Visible area 1024 x 256 starts at dot 0 of line 0. The horizontal timing
 // follows fig. 4.3 of the technical handbook (13 us HBLANK, 4.8 us HSYNC
-// starting about 1.6 us into it; 3.6 ms VBLANK). The handbook doesn't say
-// which line VSYNC starts on; line 280 makes the raster effects in Darklite's
-// demo "Tiki Tiki Ta" cover the visible lines.
+// starting about 1.6 us into it; 3.6 ms VBLANK).
+//
+// VSYNC follows the vertical scan schematic (25085-4, U107/U115): the
+// vertical address counts on through VBLANK from 0, and VSYNC is high for
+// counts 20-23 of it (VBLANK ends after count 55, 56 lines). The vertical
+// address steps where the horizontal address passes 64 (section 4.2), dot
+// 1024, so VSYNC runs from dot 1024 of line 275 to dot 1024 of line 279.
+// Tiki Tiki Ta's plasma times its raster sequence from VSYNC with the CTC;
+// with this timing it covers lines 0-255 and shows only the rows it drew.
 
 localparam H_ACTIVE     = 1024;
 localparam H_SYNC_START = 1056;   // 1.6 us front porch
@@ -68,8 +76,8 @@ localparam H_SYNC_END   = 1152;   // 4.8 us sync, 6.4 us back porch
 localparam H_TOTAL      = 1280;
 
 localparam V_ACTIVE     = 256;
-localparam V_SYNC_START = 280;
-localparam V_SYNC_END   = 283;
+localparam V_SYNC_START = 275;   // VBLANK count 20, from dot H_ACTIVE
+localparam V_SYNC_END   = 279;   // VBLANK count 24
 localparam V_TOTAL      = 312;
 
 reg [10:0] hcount = 0;
@@ -188,7 +196,7 @@ always @(posedge clk) if (ce) begin
 	hblank <= (hcount >= H_ACTIVE);
 	vblank <= (vcount >= V_ACTIVE);
 	hsync  <= (hcount >= H_SYNC_START) && (hcount < H_SYNC_END);
-	if (hcount == H_SYNC_START) vsync <= (vcount >= V_SYNC_START) && (vcount < V_SYNC_END);
+	if (hcount == H_ACTIVE) vsync <= (vcount >= V_SYNC_START) && (vcount < V_SYNC_END);
 end
 
 endmodule

@@ -119,8 +119,8 @@ For both the DART (MAME's `cd_ba` addressing) and the PIO (MAME's generic `read`
   - Mode 3 = 256 × 256, 16 colors. Mode 2 = 512 × 256, 4 colors. Mode 1 = 1024 × 256, 2 colors.
   - In modes 1 and 2 the latch still holds four bits, and software sets up the palette so only the low bits matter. Copy this behavior exactly rather than "cleaning it up".
   - Bit 1 of the column counter is shifted into the top of the shifter (a test pattern normally hidden by the palette).
-- Changes to mode, scroll and video RAM take effect at 16-dot group boundaries on real hardware. MAME only applies them once per line, and only one known demo needs finer timing. Start with per-line, but structure the design so per-group is possible later.
-- Sync timing (handbook fig. 4.3, p. 38): 64 µs line, 13 µs HBLANK, 4.8 µs HSYNC starting about 1.6 µs into HBLANK (dots 1056–1151), VBLANK 3.6 ms (56 lines) + 16.4 ms (256 lines) = 312 lines. The handbook doesn't give VSYNC's line. The core uses line 280, which makes the raster effects in Darklite's demo "Tiki Tiki Ta" cover exactly the visible lines.
+- Changes to mode, scroll and video RAM take effect at 16-dot group boundaries on real hardware. MAME only applies them once per line. The core applies them per group (`PER_GROUP = 1` in `rtl/tiki100_video.sv`): Tiki Tiki Ta's plasma and road write the scroll register early in a line for that same line.
+- Sync timing (handbook fig. 4.3, p. 38): 64 µs line, 13 µs HBLANK, 4.8 µs HSYNC starting about 1.6 µs into HBLANK (dots 1056–1151), VBLANK 3.6 ms (56 lines) + 16.4 ms (256 lines) = 312 lines. VSYNC comes from the vertical scan schematic (25085-4, U107/U115): VBLANK counts 20-23, i.e. from dot 1024 of line 275 to dot 1024 of line 279 (the vertical address steps at dot 1024). Tiki Tiki Ta's plasma times its raster sequence from VSYNC with the CTC and only covers lines 0-255, without black lines, with this timing (line 280, the earlier guess, was 5 lines late).
 - Printer port sync (OSD option): that demo needs a hardware mod that connects VSYNC to Centronics data line D0 and HSYNC to D1, read through PIO port A in bit mode. Both are active high on the cable: the demo's disk loader treats D0 = 1 as "in VSYNC". The demo needs the 4 MHz CTC to fit its raster sequence into one frame.
 
 ### Wait states
@@ -243,11 +243,11 @@ At core start, Main_MiSTer loads `boot0.rom`…`boot3.rom` from `games/Tiki100/`
 
 ## Milestones
 
-1-6 are done: CPU/memory/banking/I/O decode, video, CTC/PIO/DART with IM2 interrupts, keyboard, floppy, sound. Done from the extras: disk write-back to SD, boot ROM selection in the OSD, the printer port sync mod, floppy disk timing, the hard disk card, drive sounds, wait states.
+1-6 are done: CPU/memory/banking/I/O decode, video, CTC/PIO/DART with IM2 interrupts, keyboard, floppy, sound. Done from the extras: disk write-back to SD, boot ROM selection in the OSD, the printer port sync mod, floppy disk timing, the hard disk card, drive sounds, wait states, per-16-dot video timing.
 
 A license review of all third-party material (MAME's drive sound samples, the reused MiSTer modules, MAME-derived code) is still to do; the owner wants it done later, as a separate step.
 
-Remaining extras: cassette via MiSTer's ADC input, serial and printer ports to MiSTer I/O, per-16-dot video timing (`PER_GROUP` exists in `rtl/tiki100_video.sv` but is off), optional 31 kHz scandoubled analog VGA output (needs a `CLK_VIDEO` of at least 4× the 20 MHz dot clock for `video_mixer`). Simulate each change before it's tried on hardware.
+Remaining extras: cassette via MiSTer's ADC input, serial and printer ports to MiSTer I/O, optional 31 kHz scandoubled analog VGA output (needs a `CLK_VIDEO` of at least 4× the 20 MHz dot clock for `video_mixer`). Simulate each change before it's tried on hardware.
 
 ## Links
 

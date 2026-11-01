@@ -320,6 +320,17 @@ the core.
 
 ## Status
 
+Wait states and video timing: the CPU now gets the real machine's wait
+states (see Wait states), the scroll and mode registers take effect every
+16 dots instead of once per line, and VSYNC sits where the schematic puts
+it (from line 275 instead of 280). On the MiSTer, Tiki Tiki Ta's plasma no
+longer has black lines, the road's squares have the right widths and
+stripes, and The Hollow still runs. The plasma's line interrupt sets the
+scroll register early in each line for that line, and starts its sequence
+a fixed CTC time after VSYNC; with VSYNC 5 lines late and the scroll
+latched once per line, some lines showed rows of video RAM the demo never
+draws. The MAME comparisons still match (run without wait states).
+
 Drive sounds: the floppy drives' motor and head sounds play MAME's
 recorded 5.25" drive samples (see Sound) and work on the MiSTer. TIKO's
 boot still matches MAME (`make tiko`), and `make sound` still matches with
@@ -401,8 +412,8 @@ serial, which is all a DART can do.
 
 Milestone 2 (video): frame 100 of the boot (the "TIKI 100 / Monitor - ver
 2.03 W" banner) matches MAME's snapshot pixel for pixel. Mode and scroll
-changes take effect once per line, like MAME; set `PER_GROUP` to 1 in
-`rtl/tiki100_video.sv` to apply them every 16 dots like the real hardware.
+changes took effect once per line, like MAME (now every 16 dots, see
+Status).
 
 Milestone 1 (CPU, memory, banking, I/O decode) matches MAME's trace for the
 first 916,222 instructions of TIKI ROM 2.03w. That covers the RAM and video
